@@ -1,4 +1,4 @@
-'use client';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
     User,
@@ -8,14 +8,41 @@ import {
     Save,
     Settings,
     Bell,
-    HardDrive
+    HardDrive,
+    Loader2
 } from 'lucide-react';
 
 export default function ProfilePage() {
+    const [profile, setProfile] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                const res = await fetch('/api/user/profile');
+                const data = await res.json();
+                if (!data.error) setProfile(data);
+            } catch (err) {
+                console.error("Profile fetch error:", err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchProfile();
+    }, []);
+
     const handleSave = (e) => {
         e.preventDefault();
-        alert('Security settings and profile data updated.');
+        alert('Update functionality (API) will be available in the next release.');
     };
+
+    if (isLoading) {
+        return (
+            <div style={{ height: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Loader2 size={32} className="animate-spin text-primary" />
+            </div>
+        );
+    }
 
     return (
         <div className="profile-panel">
@@ -42,14 +69,14 @@ export default function ProfilePage() {
                             <div>
                                 <label style={{ fontSize: '0.85rem', fontWeight: 700, display: 'block', marginBottom: '8px' }}>Full Name</label>
                                 <div style={{ position: 'relative' }}>
-                                    <input type="text" className="input" defaultValue="Crawl Pilot User" style={{ paddingLeft: '40px', width: '100%' }} />
+                                    <input type="text" className="input" defaultValue={profile?.name || ""} style={{ paddingLeft: '40px', width: '100%' }} />
                                     <User size={18} style={{ position: 'absolute', left: '14px', top: '14px', color: 'var(--text-light)' }} />
                                 </div>
                             </div>
                             <div>
                                 <label style={{ fontSize: '0.85rem', fontWeight: 700, display: 'block', marginBottom: '8px' }}>Account Email</label>
                                 <div style={{ position: 'relative' }}>
-                                    <input type="email" className="input" defaultValue="user@crawlpilot.io" readOnly style={{ paddingLeft: '40px', background: 'var(--bg-light)', width: '100%' }} />
+                                    <input type="email" className="input" defaultValue={profile?.email || ""} readOnly style={{ paddingLeft: '40px', background: 'var(--bg-light)', width: '100%' }} />
                                     <Mail size={18} style={{ position: 'absolute', left: '14px', top: '14px', color: 'var(--text-light)' }} />
                                 </div>
                                 <p className="text-xs text-muted mt-2">To change your email, contact engineering support.</p>
@@ -68,7 +95,7 @@ export default function ProfilePage() {
                     className="panel-card"
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
-                        <div style={{ width: '40px', height: '40px', background: 'var(--warning-light)', color: 'var(--warning)', borderRadius: '10px', display: 'flex', alignItems: 'center', justify: 'center' }}>
+                        <div style={{ width: '40px', height: '40px', background: '#fff3e0', color: '#ff9800', borderRadius: '10px', display: 'flex', alignItems: 'center', justify: 'center' }}>
                             <Lock size={24} />
                         </div>
                         <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Security & Password</h2>
@@ -124,7 +151,7 @@ export default function ProfilePage() {
                     <p className="text-xs text-muted mb-4">Export your crawl logs or delete your account history. This action is permanent and cannot be undone.</p>
                     <div style={{ display: 'flex', gap: '12px' }}>
                         <button className="btn btn-ghost btn-sm flex-1">Export Logs</button>
-                        <button className="btn btn-outline btn-sm flex-1" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>Terminate</button>
+                        <button className="btn btn-outline btn-sm flex-1" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>Terminate Account</button>
                     </div>
                 </motion.div>
             </div>

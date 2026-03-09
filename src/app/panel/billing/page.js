@@ -1,4 +1,4 @@
-'use client';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
     Zap,
@@ -43,6 +43,21 @@ const plans = [
 ];
 
 export default function BillingPage() {
+    const [balance, setBalance] = useState(0);
+
+    useEffect(() => {
+        const fetchBalance = async () => {
+            try {
+                const res = await fetch('/api/user/profile');
+                const data = await res.json();
+                if (!data.error) setBalance(data.balance);
+            } catch (err) {
+                console.error("Balance fetch error:", err);
+            }
+        };
+        fetchBalance();
+    }, []);
+
     return (
         <div className="billing-panel">
             <div className="panel-page-header">
@@ -65,11 +80,11 @@ export default function BillingPage() {
                 <div>
                     <p className="text-sm font-bold text-muted uppercase letter-spacing-1">Current Balance</p>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                        <span className="panel-stat-value" style={{ fontSize: '2.5rem' }}>100</span>
+                        <span className="panel-stat-value" style={{ fontSize: '2.5rem' }}>{balance.toLocaleString()}</span>
                         <span className="text-primary font-bold">URLs Available</span>
                     </div>
                 </div>
-                <div style={{ padding: '12px 20px', background: 'var(--success-light)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ padding: '12px 20px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <TrendingUp size={20} color="var(--success)" />
                     <span className="text-sm font-bold" style={{ color: 'var(--success)' }}>Free Tier Active</span>
                 </div>
