@@ -32,22 +32,34 @@ export default function ManageBlogsPage() {
         views: '0'
     });
 
-    useEffect(() => {
-        const savedPosts = localStorage.getItem('cp_blogs');
-        if (savedPosts) {
-            setPosts(JSON.parse(savedPosts));
+    const fetchPosts = async () => {
+        setIsSaving(true);
+        try {
+            const res = await fetch('/api/admin/blogs');
+            const data = await res.json();
+            if (Array.isArray(data)) setPosts(data);
+        } catch (error) {
+            console.error('Failed to fetch blogs:', error);
+        } finally {
+            setIsSaving(false);
         }
-    }, []);
-
-    const saveToStorage = (newPosts) => {
-        setPosts(newPosts);
-        localStorage.setItem('cp_blogs', JSON.stringify(newPosts));
     };
 
-    const handleDelete = (id) => {
+    useEffect(() => {
+        fetchPosts();
+    }, []);
+
+    const handleDelete = async (id) => {
         if (confirm("Permanently delete this article? This cannot be undone.")) {
-            const updated = posts.filter(p => p.id !== id);
-            saveToStorage(updated);
+            setIsSaving(true);
+            try {
+                const res = await fetch(`/api/admin/blogs?id=${id}`, { method: 'DELETE' });
+                if (res.ok) await fetchPosts();
+            } catch (error) {
+                console.error('Delete failed:', error);
+            } finally {
+                setIsSaving(false);
+            }
         }
     };
 
@@ -58,6 +70,7 @@ export default function ManageBlogsPage() {
             slug: '',
             category: 'Insights',
             excerpt: '',
+            content: '',
             date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             views: '0'
         });
@@ -70,24 +83,30 @@ export default function ManageBlogsPage() {
         setShowModal(true);
     };
 
-    const handleFormSubmit = (e) => {
+    const handleFormSubmit = async (e) => {
         e.preventDefault();
         setIsSaving(true);
 
-        setTimeout(() => {
-            if (editingPost) {
-                const updated = posts.map(p => p.id === editingPost.id ? { ...formData, id: p.id } : p);
-                saveToStorage(updated);
+        try {
+            const method = editingPost ? 'PUT' : 'POST';
+            const res = await fetch('/api/admin/blogs', {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...formData, id: editingPost?.id })
+            });
+
+            if (res.ok) {
+                await fetchPosts();
+                setShowModal(false);
             } else {
-                const newPost = {
-                    ...formData,
-                    id: Date.now()
-                };
-                saveToStorage([...posts, newPost]);
+                const error = await res.json();
+                alert(`Save failed: ${error.error}`);
             }
+        } catch (error) {
+            console.error('Save failed:', error);
+        } finally {
             setIsSaving(false);
-            setShowModal(false);
-        }, 800);
+        }
     };
 
     const filteredPosts = posts.filter(p =>

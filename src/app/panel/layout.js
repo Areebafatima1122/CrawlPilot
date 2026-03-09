@@ -1,8 +1,10 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSession, signOut } from "next-auth/react";
+import { useEffect } from "react";
 import {
     LayoutDashboard,
     Search,
@@ -36,7 +38,21 @@ const navItems = [
 
 export default function PanelLayout({ children }) {
     const pathname = usePathname();
+    const router = useRouter();
+    const { data: session, status } = useSession();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    useEffect(() => {
+        if (status === "unauthenticated") {
+            router.push("/authorize");
+        }
+    }, [status, router]);
+
+    if (status === "loading") {
+        return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
+    }
+
+    if (!session) return null;
 
     return (
         <div className="panel-layout">
@@ -94,10 +110,14 @@ export default function PanelLayout({ children }) {
                 </nav>
 
                 <div className="panel-sidebar-footer">
-                    <Link href="/authorize" className="panel-nav-item">
+                    <button
+                        onClick={() => signOut({ callbackUrl: '/authorize' })}
+                        className="panel-nav-item"
+                        style={{ width: '100%', textAlign: 'left', background: 'none' }}
+                    >
                         <LogOut size={20} />
                         <span>Sign Out</span>
-                    </Link>
+                    </button>
                     <Link href="/" className="panel-nav-item back-btn">
                         <ArrowLeft size={20} />
                         <span>Back to Site</span>
@@ -120,15 +140,17 @@ export default function PanelLayout({ children }) {
                     </div>
 
                     <div className="header-right">
-                        <Link href="/admin" className="btn btn-ghost btn-sm mr-2" style={{ color: 'var(--primary)', fontWeight: 800 }}>
-                            Admin Center
-                        </Link>
+                        {session?.user?.role === 'ADMIN' && (
+                            <Link href="/admin" className="btn btn-ghost btn-sm mr-2" style={{ color: 'var(--primary)', fontWeight: 800 }}>
+                                Admin Center
+                            </Link>
+                        )}
                         <button className="header-icon-btn"><Bell size={20} /></button>
                         <div className="panel-user-profile">
-                            <div className="user-avatar">AD</div>
+                            <div className="user-avatar">{session.user.name?.split(' ').map(n => n[0]).join('') || 'U'}</div>
                             <div className="user-info">
-                                <span className="user-name">Admin</span>
-                                <span className="user-email">admin@crawlpilot.io</span>
+                                <span className="user-name">{session.user.name || 'User'}</span>
+                                <span className="user-email">{session.user.email}</span>
                             </div>
                         </div>
                     </div>

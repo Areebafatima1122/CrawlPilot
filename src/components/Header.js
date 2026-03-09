@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSession, signOut } from "next-auth/react";
 import {
     Menu,
     X,
@@ -11,7 +12,8 @@ import {
     Zap,
     Globe,
     MessageSquare,
-    ExternalLink
+    ExternalLink,
+    LogOut
 } from 'lucide-react';
 import './Header.css';
 
@@ -19,6 +21,7 @@ export default function Header() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(null);
     const pathname = usePathname();
+    const { data: session, status } = useSession();
 
     if (pathname.startsWith('/panel')) return null;
 
@@ -93,10 +96,25 @@ export default function Header() {
                 </nav>
 
                 <div className="header-actions">
-                    <Link href="/authorize" className="btn btn-ghost">Login</Link>
-                    <Link href="/panel/overview" className="btn btn-primary">
-                        Dashboard <ExternalLink size={14} style={{ marginLeft: '4px' }} />
-                    </Link>
+                    {status === 'unauthenticated' ? (
+                        <>
+                            <Link href="/authorize" className="btn btn-ghost">Login</Link>
+                            <Link href="/signup" className="btn btn-primary">Get Started</Link>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                onClick={() => signOut()}
+                                className="btn btn-ghost"
+                                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                            >
+                                <LogOut size={16} /> Sign Out
+                            </button>
+                            <Link href={session?.user?.role === 'ADMIN' ? '/admin' : '/panel/overview'} className="btn btn-primary">
+                                {session?.user?.role === 'ADMIN' ? 'Admin' : 'Dashboard'}
+                            </Link>
+                        </>
+                    )}
 
                     <button className="mobile-toggle" onClick={() => setMobileOpen(!mobileOpen)}>
                         {mobileOpen ? <X size={24} /> : <Menu size={24} />}
@@ -119,7 +137,26 @@ export default function Header() {
                         <Link href="/faq" onClick={() => setMobileOpen(false)}>FAQ</Link>
                         <Link href="/blog" onClick={() => setMobileOpen(false)}>Blog</Link>
                         <div className="mobile-divider" />
-                        <Link href="/authorize" className="btn btn-primary btn-block" onClick={() => setMobileOpen(false)}>Login / Sign Up</Link>
+                        {status === 'unauthenticated' ? (
+                            <Link href="/signup" className="btn btn-primary btn-block" onClick={() => setMobileOpen(false)}>Login / Sign Up</Link>
+                        ) : (
+                            <>
+                                <Link
+                                    href={session?.user?.role === 'ADMIN' ? '/admin' : '/panel/overview'}
+                                    className="btn btn-primary btn-block"
+                                    onClick={() => setMobileOpen(false)}
+                                    style={{ marginBottom: '12px' }}
+                                >
+                                    Dashboard
+                                </Link>
+                                <button
+                                    onClick={() => { signOut(); setMobileOpen(false); }}
+                                    className="btn btn-ghost btn-block"
+                                >
+                                    Sign Out
+                                </button>
+                            </>
+                        )}
                     </motion.div>
                 )}
             </AnimatePresence>

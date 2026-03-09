@@ -1,7 +1,9 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useSession } from "next-auth/react";
+import { useEffect } from "react";
 import {
     LayoutDashboard,
     Users,
@@ -12,8 +14,10 @@ import {
     Zap,
     Search,
     Plus,
-    BarChart3
+    BarChart3,
+    ArrowLeft
 } from 'lucide-react';
+import { signOut } from "next-auth/react";
 import './admin.css';
 
 const adminNavItems = [
@@ -24,6 +28,20 @@ const adminNavItems = [
 
 export default function AdminLayout({ children }) {
     const pathname = usePathname();
+    const router = useRouter();
+    const { data: session, status } = useSession();
+
+    useEffect(() => {
+        if (status === "unauthenticated" || (status === "authenticated" && session?.user?.role !== "ADMIN")) {
+            router.push("/authorize");
+        }
+    }, [status, session, router]);
+
+    if (status === "loading") {
+        return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
+    }
+
+    if (!session || session.user.role !== "ADMIN") return null;
 
     return (
         <div className="admin-layout">
@@ -56,9 +74,17 @@ export default function AdminLayout({ children }) {
                 </nav>
 
                 <div style={{ padding: '24px', borderTop: '1px solid var(--border-color)' }}>
-                    <Link href="/panel/overview" className="admin-nav-item">
+                    <button
+                        onClick={() => signOut({ callbackUrl: '/authorize' })}
+                        className="admin-nav-item"
+                        style={{ width: '100%', textAlign: 'left', background: 'none' }}
+                    >
                         <LogOut size={20} />
-                        <span>Exit Admin</span>
+                        <span>Sign Out</span>
+                    </button>
+                    <Link href="/panel/overview" className="admin-nav-item">
+                        <ArrowLeft size={20} style={{ transform: 'rotate(0deg)' }} />
+                        <span>User View</span>
                     </Link>
                 </div>
             </aside>
@@ -80,10 +106,12 @@ export default function AdminLayout({ children }) {
                         </button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>Super Admin</div>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-light)' }}>admin@crawlpilot.io</div>
+                                <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>{session.user.name}</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-light)' }}>{session.user.email}</div>
                             </div>
-                            <div style={{ width: '40px', height: '40px', background: 'var(--admin-primary)', color: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>SA</div>
+                            <div style={{ width: '40px', height: '40px', background: 'var(--admin-primary)', color: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+                                {session.user.name?.split(' ').map(n => n[0]).join('') || 'A'}
+                            </div>
                         </div>
                     </div>
                 </header>

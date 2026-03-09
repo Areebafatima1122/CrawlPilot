@@ -57,28 +57,42 @@ export default function IndexingPanel() {
         { id: 'common', name: 'CommonCrawl', desc: 'Open data crawling', color: '#B0B0B0' }
     ];
 
-    const [activeResults, setActiveResults] = useState([]);
-    const [realTimeLogs, setRealTimeLogs] = useState([]);
-    const consoleRef = useRef(null);
+    const [userBalance, setUserBalance] = useState(0);
 
-    const trackingScript = `<script src="https://crawlpilot.io/track.js?id=CP-394921" async></script>`;
+    const fetchInitialData = async () => {
+        try {
+            // Fetch results
+            const resResults = await fetch('/api/indexing/discover');
+            const dataResults = await resResults.json();
+            if (Array.isArray(dataResults)) {
+                setActiveResults(dataResults.map(r => ({
+                    ...r,
+                    bots: JSON.parse(r.bots)
+                })));
+            }
 
-    // Load data from localStorage on mount
+            // Fetch balance (from session/user API)
+            const resUser = await fetch('/api/auth/session');
+            const session = await resUser.json();
+            if (session?.user) {
+                // In a real app we'd fetch fresh balance from /api/user/profile
+                // For now, let's assume it's in the session or fetch it
+                const resProfile = await fetch('/api/admin/users'); // Reuse or create profile API
+                const allUsers = await resProfile.json();
+                const me = allUsers.find(u => u.id === session.user.id);
+                if (me) setUserBalance(me.balance);
+            }
+        } catch (error) {
+            console.error('Failed to sync data:', error);
+        }
+    };
+
+    // Load real data from DB on mount
     useEffect(() => {
-        const savedResults = localStorage.getItem('cp_results');
+        fetchInitialData();
         const savedLogs = localStorage.getItem('cp_logs');
-        if (savedResults) setActiveResults(JSON.parse(savedResults));
         if (savedLogs) setRealTimeLogs(JSON.parse(savedLogs));
     }, []);
-
-    // Save to localStorage whenever data changes
-    useEffect(() => {
-        localStorage.setItem('cp_results', JSON.stringify(activeResults));
-    }, [activeResults]);
-
-    useEffect(() => {
-        localStorage.setItem('cp_logs', JSON.stringify(realTimeLogs));
-    }, [realTimeLogs]);
 
     const toggleBot = (botId) => {
         if (selectedBots.includes(botId)) {
@@ -94,7 +108,7 @@ export default function IndexingPanel() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         let urls = [];
         const timestamp = new Date().toLocaleTimeString();
@@ -105,8 +119,8 @@ export default function IndexingPanel() {
 
             setIsSubmitting(true);
 
-            // Simulate sitemap crawling
-            setTimeout(() => {
+            // Simulate sitemap crawling (Frontend simulation as before)
+            setTimeout(async () => {
                 const base = sitemapUrl.split('/').slice(0, 3).join('/');
                 urls = [
                     `${base}/about`,
@@ -123,46 +137,52 @@ export default function IndexingPanel() {
                 ];
                 setRealTimeLogs(prev => [...sitemapLogs, ...prev]);
 
-                processUrls(urls, timestamp);
+                await processUrls(urls, timestamp);
             }, 1200);
         } else {
             urls = inputText.split('\n').map(u => u.trim()).filter(u => u !== '');
             if (urls.length === 0) return;
             setIsSubmitting(true);
-            processUrls(urls, timestamp);
+            await processUrls(urls, timestamp);
         }
     };
 
-    const processUrls = (urls, timestamp) => {
+    const processUrls = async (urls, timestamp) => {
         const pingCycles = signalIntensity === 'extreme' ? 3 : signalIntensity === 'aggressive' ? 2 : 1;
 
-        setTimeout(() => {
-            const newItems = urls.map((url, index) => ({
-                id: Date.now() + index,
-                url: url,
-                status: 'Delivered',
-                time: 'Just now',
-                bots: selectedBots
-            }));
-
-            // Prepend new results
-            setActiveResults(prev => [...newItems, ...prev]);
-
-            let newLogs = [];
-            urls.forEach(url => {
-                selectedBots.forEach(bot => {
-                    newLogs.push(`[${timestamp}] --- PING --- ${bot.toUpperCase()} SERVICE --- Node Dispatched to ${url}`);
-                });
-                if (pingEnabled) {
-                    newLogs.push(`[${timestamp}] --- BROADCAST --- Pinging Indexing Nodes (${pingCycles} cycles) for ${url}`);
-                }
+        try {
+            const res = await fetch('/api/indexing/discover', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ urls, bots: selectedBots })
             });
 
-            setRealTimeLogs(prev => [...newLogs, ...prev]);
+            if (res.ok) {
+                // Refresh local results and logs
+                await fetchInitialData();
+
+                let newLogs = [];
+                urls.forEach(url => {
+                    selectedBots.forEach(bot => {
+                        newLogs.push(`[${timestamp}] --- PING --- ${bot.toUpperCase()} SERVICE --- Node Dispatched to ${url}`);
+                    });
+                    if (pingEnabled) {
+                        newLogs.push(`[${timestamp}] --- BROADCAST --- Pinging Indexing Nodes (${pingCycles} cycles) for ${url}`);
+                    }
+                });
+
+                setRealTimeLogs(prev => [...newLogs, ...prev]);
+                setShowAddModal(false);
+                setInputText('');
+            } else {
+                const error = await res.json();
+                alert(`Submission failed: ${error.error || 'Unknown error'}`);
+            }
+        } catch (err) {
+            console.error('Discovery submission error:', err);
+        } finally {
             setIsSubmitting(false);
-            setShowAddModal(false);
-            setInputText('');
-        }, 1000);
+        }
     };
 
     useEffect(() => {

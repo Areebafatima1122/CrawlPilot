@@ -21,15 +21,18 @@ export default function BlogPage() {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // Load from localStorage to behave like a dynamic database
-        const savedPosts = localStorage.getItem('cp_blogs');
-        if (savedPosts) {
-            setPosts(JSON.parse(savedPosts));
-        } else {
-            // If nothing in storage, start with empty (as requested: remove static data)
-            setPosts([]);
-        }
-        setIsLoading(false);
+        const fetchPosts = async () => {
+            try {
+                const res = await fetch('/api/admin/blogs');
+                const data = await res.json();
+                if (Array.isArray(data)) setPosts(data);
+            } catch (error) {
+                console.error('Failed to items:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchPosts();
     }, []);
 
     return (

@@ -1,4 +1,5 @@
 'use client';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
     Users,
@@ -7,18 +8,32 @@ import {
     FileText,
     Activity,
     ArrowUpRight,
-    ArrowDownRight,
     Search,
     Shield
 } from 'lucide-react';
 
 export default function AdminOverview() {
-    // Zeroed out stats for clean state
+    const [statsData, setStatsData] = useState({
+        userCount: 0,
+        blogCount: 0,
+        discoveryCount: 0,
+        totalRevenue: 0
+    });
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            const res = await fetch('/api/admin/stats');
+            const data = await res.json();
+            if (!data.error) setStatsData(data);
+        };
+        fetchStats();
+    }, []);
+
     const stats = [
-        { label: 'Total Users', value: '4', icon: <Users size={24} />, trend: '0%', isUp: true },
-        { label: 'Active Discoveries', value: '0', icon: <Zap size={24} />, trend: '0%', isUp: true },
-        { label: 'Total Revenue', value: '$0', icon: <TrendingUp size={24} />, trend: '0%', isUp: true },
-        { label: 'Blog Posts', value: '0', icon: <FileText size={24} />, trend: '0%', isUp: true },
+        { label: 'Total Users', value: statsData.userCount.toString(), icon: <Users size={24} />, trend: '0%', isUp: true },
+        { label: 'Active Discoveries', value: statsData.discoveryCount.toString(), icon: <Zap size={24} />, trend: '0%', isUp: true },
+        { label: 'Total Revenue', value: `$${statsData.totalRevenue}`, icon: <TrendingUp size={24} />, trend: '0%', isUp: true },
+        { label: 'Blog Posts', value: statsData.blogCount.toString(), icon: <FileText size={24} />, trend: '0%', isUp: true },
     ];
 
     return (

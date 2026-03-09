@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Users,
@@ -8,9 +8,7 @@ import {
     X,
     TrendingUp,
     Zap,
-    History,
-    MoreVertical,
-    Check
+    History
 } from 'lucide-react';
 
 export default function ManageUsersPage() {
@@ -18,28 +16,48 @@ export default function ManageUsersPage() {
     const [selectedUser, setSelectedUser] = useState(null);
     const [topupAmount, setTopupAmount] = useState('1000');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [users, setUsers] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const [users, setUsers] = useState([
-        { id: 1, name: 'Jack SEO', email: 'jack@example.com', plan: 'Free', balance: 100, joined: '2 days ago' },
-        { id: 2, name: 'Shane SEO', email: 'shane.seo@gmail.com', plan: 'Growth', balance: 10240, joined: '1 week ago' },
-        { id: 3, name: 'Alice Markets', email: 'alice@agency.io', plan: 'Agency', balance: 85200, joined: '1 month ago' },
-        { id: 4, name: 'Bob Builder', email: 'bob@stack.com', plan: 'Enterprise', balance: 1200000, joined: '2 months ago' },
-    ]);
+    const fetchUsers = async () => {
+        setIsLoading(true);
+        try {
+            const res = await fetch('/api/admin/users');
+            const data = await res.json();
+            if (Array.isArray(data)) setUsers(data);
+        } catch (error) {
+            console.error('Failed to fetch users:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-    const handleTopup = (e) => {
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const handleTopup = async (e) => {
         e.preventDefault();
         setIsProcessing(true);
 
-        setTimeout(() => {
-            setUsers(users.map(u =>
-                u.id === selectedUser.id
-                    ? { ...u, balance: u.balance + parseInt(topupAmount) }
-                    : u
-            ));
+        try {
+            const res = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: selectedUser.id, amount: topupAmount })
+            });
+
+            if (res.ok) {
+                await fetchUsers(); // Refresh the list
+                setShowTopupModal(false);
+            } else {
+                alert('Top-up failed');
+            }
+        } catch (error) {
+            console.error('Top-up failed:', error);
+        } finally {
             setIsProcessing(false);
-            setShowTopupModal(false);
-            alert(`Successfully added ${topupAmount} URLs to ${selectedUser.email}`);
-        }, 1200);
+        }
     };
 
     return (
