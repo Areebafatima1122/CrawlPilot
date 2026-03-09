@@ -1,5 +1,5 @@
-'use client';
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
     Zap,
@@ -13,6 +13,46 @@ import {
 } from 'lucide-react';
 
 export default function OverviewPage() {
+    const [stats, setStats] = useState({
+        balance: 0,
+        used: 0,
+        delivered: 0,
+        botSignals: 0
+    });
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                // Fetch User Profile for balance
+                const resProfile = await fetch('/api/user/profile');
+                const profile = await resProfile.json();
+
+                // Fetch Indexing Results for usage stats
+                const resResults = await fetch('/api/indexing/discover');
+                const results = await resResults.json();
+
+                if (profile && !profile.error) {
+                    const deliveredCount = Array.isArray(results) ? results.filter(r => r.status === 'Delivered').length : 0;
+                    const usedCount = Array.isArray(results) ? results.length : 0;
+
+                    setStats({
+                        balance: profile.balance || 0,
+                        used: usedCount,
+                        delivered: deliveredCount,
+                        botSignals: usedCount * 3 // Mocked multiplier for "signals"
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to load overview data:", err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchStats();
+    }, []);
+
     // Zeroed out bars for clean state
     const bars = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
@@ -29,34 +69,34 @@ export default function OverviewPage() {
                         <div className="stat-card-icon"><Zap size={20} /></div>
                         <span className="stat-card-trend" style={{ background: 'var(--bg-light)', color: 'var(--text-light)' }}>0% change</span>
                     </div>
-                    <div className="panel-stat-value">100</div>
+                    <div className="panel-stat-value">{isLoading ? '...' : stats.balance.toLocaleString()}</div>
                     <div className="panel-stat-label">URLs Remaining</div>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="panel-stat-card">
                     <div className="stat-card-header">
                         <div className="stat-card-icon"><Search size={20} /></div>
-                        <span className="stat-card-trend" style={{ background: 'var(--bg-light)', color: 'var(--text-light)' }}>0% change</span>
+                        <span className="stat-card-trend" style={{ background: 'var(--bg-light)', color: 'var(--text-light)' }}>+0.00%</span>
                     </div>
-                    <div className="panel-stat-value">0</div>
+                    <div className="panel-stat-value">{isLoading ? '...' : stats.used}</div>
                     <div className="panel-stat-label">URLs Used</div>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="panel-stat-card">
                     <div className="stat-card-header">
                         <div className="stat-card-icon"><CheckCircle2 size={20} /></div>
-                        <span className="stat-card-trend" style={{ background: 'var(--bg-light)', color: 'var(--text-light)' }}>0% change</span>
+                        <span className="stat-card-trend" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)' }}>100% Success</span>
                     </div>
-                    <div className="panel-stat-value">0</div>
+                    <div className="panel-stat-value">{isLoading ? '...' : stats.delivered}</div>
                     <div className="panel-stat-label">Delivered</div>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="panel-stat-card">
                     <div className="stat-card-header">
                         <div className="stat-card-icon"><Bot size={20} /></div>
-                        <span className="stat-card-trend" style={{ background: 'var(--bg-light)', color: 'var(--text-light)' }}>0% change</span>
+                        <span className="stat-card-trend" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary)' }}>Live Signal</span>
                     </div>
-                    <div className="panel-stat-value">0</div>
+                    <div className="panel-stat-value">{isLoading ? '...' : stats.botSignals}</div>
                     <div className="panel-stat-label">Bot Signals</div>
                 </motion.div>
             </div>

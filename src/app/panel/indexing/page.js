@@ -40,6 +40,11 @@ export default function IndexingPanel() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('All Status');
     const [copied, setCopied] = useState(false);
+    const [realTimeLogs, setRealTimeLogs] = useState([]);
+    const [activeResults, setActiveResults] = useState([]);
+    const consoleRef = useRef(null);
+
+    const trackingScript = `<script src="https://bot-tracker.crawlpilot.io/v1/track.js" async></script>`;
 
     // Advanced Features
     const [selectedBots, setSelectedBots] = useState(['google', 'bing', 'openai']);
@@ -71,16 +76,11 @@ export default function IndexingPanel() {
                 })));
             }
 
-            // Fetch balance (from session/user API)
-            const resUser = await fetch('/api/auth/session');
-            const session = await resUser.json();
-            if (session?.user) {
-                // In a real app we'd fetch fresh balance from /api/user/profile
-                // For now, let's assume it's in the session or fetch it
-                const resProfile = await fetch('/api/admin/users'); // Reuse or create profile API
-                const allUsers = await resProfile.json();
-                const me = allUsers.find(u => u.id === session.user.id);
-                if (me) setUserBalance(me.balance);
+            // Fetch user profile (to get real-time balance)
+            const resProfile = await fetch('/api/user/profile');
+            const userProfile = await resProfile.json();
+            if (userProfile?.balance !== undefined) {
+                setUserBalance(userProfile.balance);
             }
         } catch (error) {
             console.error('Failed to sync data:', error);
