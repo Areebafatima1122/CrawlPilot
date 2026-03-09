@@ -7,7 +7,11 @@ import bcrypt from "bcryptjs";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
     adapter: PrismaAdapter(prisma),
-    session: { strategy: "jwt" }, // Still using JWT for roles/session
+    secret: process.env.AUTH_SECRET,
+    session: {
+        strategy: "jwt",
+        maxAge: 30 * 24 * 60 * 60, // 30 days
+    },
     providers: [
         Google({
             clientId: process.env.AUTH_GOOGLE_ID,
@@ -19,27 +23,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 password: { label: "Password", type: "password" },
             },
             async authorize(credentials) {
-                if (!credentials?.email || !credentials?.password) return null;
+                try {
+                    if (!credentials?.email || !credentials?.password) return null;
 
-                const user = await prisma.user.findUnique({
-                    where: { email: credentials.email },
-                });
+                    const user = await prisma.user.findUnique({
+                        where: { email: credentials.email.toLowerCase() },
+                    });
 
-                if (!user || !user.password) return null;
+                    if (!user || !user.password) return null;
 
-                const isPasswordCorrect = await bcrypt.compare(
-                    credentials.password,
-                    user.password
-                );
+                    const isPasswordCorrect = await bcrypt.compare(
+                        credentials.password,
+                        user.password
+                    );
 
-                if (!isPasswordCorrect) return null;
+                    if (!isPasswordCorrect) return null;
 
-                return {
-                    id: user.id,
-                    name: user.name,
-                    email: user.email,
-                    role: user.role,
-                };
+                    return {
+                        id: user.id,
+                        name: user.name,
+                        email: user.email,
+                        role: user.role,
+                    };
+                } catch (error) {
+                    console.error("Auth error:", error);
+                    return null;
+                }
             },
         }),
     ],
@@ -47,7 +56,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         async jwt({ token, user, trigger, session }) {
             if (user) {
                 token.id = user.id;
-                token.role = user.role || 'USER'; // Default role
+                token.role = user.role || 'USER';
             }
             return token;
         },
@@ -61,5 +70,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     pages: {
         signIn: "/authorize",
+        error: "/authorize", // Redirect errors back to login page
     },
+    trustHost: true,
 });

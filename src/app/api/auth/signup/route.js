@@ -10,8 +10,10 @@ export async function POST(req) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
+        const normalizedEmail = email.toLowerCase();
+
         const existingUser = await prisma.user.findUnique({
-            where: { email },
+            where: { email: normalizedEmail },
         });
 
         if (existingUser) {
@@ -23,7 +25,7 @@ export async function POST(req) {
         const user = await prisma.user.create({
             data: {
                 name,
-                email,
+                email: normalizedEmail,
                 password: hashedPassword,
                 role: "USER",
                 balance: 100, // Default signup bonus
@@ -32,7 +34,7 @@ export async function POST(req) {
 
         return NextResponse.json({ success: true, user: { id: user.id, email: user.email } });
     } catch (error) {
-        console.error("Signup error:", error);
-        return NextResponse.json({ error: "Signup failed" }, { status: 500 });
+        console.error("Signup error details:", error);
+        return NextResponse.json({ error: error.message || "Signup failed" }, { status: 500 });
     }
 }

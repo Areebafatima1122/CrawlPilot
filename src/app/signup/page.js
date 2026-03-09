@@ -25,12 +25,17 @@ export default function SignupPage() {
             });
 
             if (res.ok) {
-                // Auto sign in
-                await signIn('credentials', {
+                // Auto sign in using the NEXT_AUTH signIn
+                const signResult = await signIn('credentials', {
                     email,
                     password,
+                    redirect: true,
                     callbackUrl: '/panel/overview',
                 });
+
+                if (signResult?.error) {
+                    setError(signResult.error === 'CredentialsSignin' ? 'Invalid credentials' : signResult.error);
+                }
             } else {
                 const data = await res.json();
                 setError(data.error || 'Signup failed');
