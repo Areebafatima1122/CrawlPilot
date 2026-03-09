@@ -1,0 +1,102 @@
+'use client';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { motion } from 'framer-motion';
+import {
+    LayoutDashboard,
+    Users,
+    FileText,
+    Settings,
+    Bell,
+    LogOut,
+    Zap,
+    Search,
+    Plus,
+    BarChart3
+} from 'lucide-react';
+import './admin.css';
+
+const adminNavItems = [
+    { href: '/admin', label: 'Overview', icon: <LayoutDashboard size={20} /> },
+    { href: '/admin/users', label: 'Manage Users', icon: <Users size={20} /> },
+    { href: '/admin/blogs', label: 'Manage Blogs', icon: <FileText size={20} /> },
+];
+
+export default function AdminLayout({ children }) {
+    const pathname = usePathname();
+
+    return (
+        <div className="admin-layout">
+            <aside className="admin-sidebar">
+                <div style={{ padding: '32px 24px' }}>
+                    <Link href="/" className="logo">
+                        <Zap className="logo-icon" size={24} fill="currentColor" style={{ color: 'var(--admin-primary)' }} />
+                        Crawl <span style={{ color: 'var(--admin-primary)' }}>Admin</span>
+                    </Link>
+                </div>
+
+                <nav className="admin-nav">
+                    <div className="text-xs font-bold text-muted uppercase mb-4 px-4 letter-spacing-1">Management</div>
+                    {adminNavItems.map((item) => (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className={`admin-nav-item ${pathname === item.href ? 'active' : ''}`}
+                        >
+                            {item.icon}
+                            <span>{item.label}</span>
+                        </Link>
+                    ))}
+
+                    <div className="text-xs font-bold text-muted uppercase mt-8 mb-4 px-4 letter-spacing-1">System</div>
+                    <Link href="/admin/settings" className="admin-nav-item">
+                        <Settings size={20} />
+                        <span>Settings</span>
+                    </Link>
+                </nav>
+
+                <div style={{ padding: '24px', borderTop: '1px solid var(--border-color)' }}>
+                    <Link href="/panel/overview" className="admin-nav-item">
+                        <LogOut size={20} />
+                        <span>Exit Admin</span>
+                    </Link>
+                </div>
+            </aside>
+
+            <main className="admin-main">
+                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
+                    <div style={{ position: 'relative', width: '300px' }}>
+                        <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-light)' }} size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search records..."
+                            style={{ width: '100%', padding: '10px 10px 10px 40px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'white' }}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                        <button style={{ position: 'relative', background: 'white', border: '1px solid var(--border-color)', padding: '10px', borderRadius: '12px' }}>
+                            <Bell size={20} />
+                            <span style={{ position: 'absolute', top: -4, right: -4, width: '18px', height: '18px', background: 'var(--admin-primary)', color: 'white', fontSize: '0.6rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>3</span>
+                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>Super Admin</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-light)' }}>admin@crawlpilot.io</div>
+                            </div>
+                            <div style={{ width: '40px', height: '40px', background: 'var(--admin-primary)', color: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>SA</div>
+                        </div>
+                    </div>
+                </header>
+
+                <motion.div
+                    key={pathname}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                >
+                    {children}
+                </motion.div>
+            </main>
+        </div>
+    );
+}
