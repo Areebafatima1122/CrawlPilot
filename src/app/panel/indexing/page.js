@@ -31,6 +31,19 @@ import {
     FileCode
 } from 'lucide-react';
 
+const botOptions = [
+    { id: 'google', name: 'GoogleBot', desc: 'Primary SEO crawler', color: '#4285F4' },
+    { id: 'bing', name: 'BingBot', desc: 'Microsoft & Yahoo', color: '#00A4EF' },
+    { id: 'openai', name: 'OpenAI Bot', desc: 'ChatGPT discovery', color: '#10A37F' },
+    { id: 'baidu', name: 'Baidu Spider', desc: 'Asian market indexing', color: '#DE0000' },
+    { id: 'yandex', name: 'Yandex Bot', desc: 'Eastern Europe / Russia', color: '#FFCC00' },
+    { id: 'duck', name: 'DuckDuckGo', desc: 'Privacy-focused index', color: '#DE5833' },
+    { id: 'apple', name: 'AppleBot', desc: 'Siri & Spotlight hits', color: '#000000' },
+    { id: 'pinterest', name: 'Pinterest Bot', desc: 'Visual discovery signaling', color: '#E60023' },
+    { id: 'common', name: 'CommonCrawl', desc: 'Open data crawling', color: '#B0B0B0' },
+    { id: 'anthropic', name: 'ClaudeBot', desc: 'AI crawler for Claude', color: '#D97757' }
+];
+
 export default function IndexingPanel() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showCodeModal, setShowCodeModal] = useState(false);
@@ -43,26 +56,10 @@ export default function IndexingPanel() {
     const [realTimeLogs, setRealTimeLogs] = useState([]);
     const [activeResults, setActiveResults] = useState([]);
     const consoleRef = useRef(null);
-
-    const trackingScript = `<script src="https://bot-tracker.crawlpilot.io/v1/track.js" async></script>`;
-
-    // Advanced Features
-    const [selectedBots, setSelectedBots] = useState(['google', 'bing', 'openai']);
+    const [selectedBots, setSelectedBots] = useState(botOptions.map(b => b.id));
     const [signalIntensity, setSignalIntensity] = useState('standard');
     const [pingEnabled, setPingEnabled] = useState(true);
-
-    const botOptions = [
-        { id: 'google', name: 'GoogleBot', desc: 'Primary SEO crawler', color: '#4285F4' },
-        { id: 'bing', name: 'BingBot', desc: 'Microsoft & Yahoo', color: '#00A4EF' },
-        { id: 'openai', name: 'OpenAI Bot', desc: 'ChatGPT discovery', color: '#10A37F' },
-        { id: 'baidu', name: 'Baidu Spider', desc: 'Asian market indexing', color: '#DE0000' },
-        { id: 'yandex', name: 'Yandex Bot', desc: 'Eastern Europe / Russia', color: '#FFCC00' },
-        { id: 'duck', name: 'DuckDuckGo', desc: 'Privacy-focused index', color: '#DE5833' },
-        { id: 'apple', name: 'AppleBot', desc: 'Siri & Spotlight hits', color: '#000000' },
-        { id: 'pinterest', name: 'Pinterest Bot', desc: 'Visual discovery signaling', color: '#E60023' },
-        { id: 'common', name: 'CommonCrawl', desc: 'Open data crawling', color: '#B0B0B0' },
-        { id: 'anthropic', name: 'ClaudeBot', desc: 'AI crawler for Claude', color: '#D97757' }
-    ];
+    const trackingScript = `<script src="https://bot-tracker.crawlpilot.io/v1/track.js" async></script>`;
 
     const userAgents = [
         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
@@ -213,7 +210,7 @@ export default function IndexingPanel() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h1 className="panel-page-title">Discovery Console</h1>
-                        <p className="panel-page-subtitle">Multi-Bot Indexing & Advanced Ping Signaling Engine.</p>
+                        <p className="panel-page-subtitle">Signal 10+ Global Search & AI Engines in real-time.</p>
                     </div>
                     <div style={{ display: 'flex', gap: '12px' }}>
                         <button className="btn btn-outline" onClick={() => setShowCodeModal(true)}>
@@ -257,7 +254,10 @@ export default function IndexingPanel() {
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', color: 'var(--primary)' }}>
                         <Globe size={18} /> <span style={{ fontWeight: 800, fontSize: '0.8rem' }}>ACTIVE BOTS</span>
                     </div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800 }}>{selectedBots.length} Engines</div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                        <span style={{ fontSize: '1.2rem', fontWeight: 800 }}>{botOptions.length} Engines</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 700 }}>● ONLINE</span>
+                    </div>
                 </div>
                 <div className="panel-card" style={{ padding: '20px' }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', color: 'var(--primary)' }}>
