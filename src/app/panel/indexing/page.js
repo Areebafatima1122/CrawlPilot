@@ -209,6 +209,10 @@ export default function IndexingPanel() {
                             handleSubmit();
                         }, 300000); // 5 minutes
                     }
+
+                    // Close modal after successful sitemap processing
+                    setShowAddModal(false);
+                    setInputText('');
                 } else {
                     alert(data.error || "No URLs found in the sitemap.");
                 }
