@@ -57,10 +57,22 @@ export default function IndexingPanel() {
         { id: 'openai', name: 'OpenAI Bot', desc: 'ChatGPT discovery', color: '#10A37F' },
         { id: 'baidu', name: 'Baidu Spider', desc: 'Asian market indexing', color: '#DE0000' },
         { id: 'yandex', name: 'Yandex Bot', desc: 'Eastern Europe / Russia', color: '#FFCC00' },
+        { id: 'duck', name: 'DuckDuckGo', desc: 'Privacy-focused index', color: '#DE5833' },
         { id: 'apple', name: 'AppleBot', desc: 'Siri & Spotlight hits', color: '#000000' },
         { id: 'pinterest', name: 'Pinterest Bot', desc: 'Visual discovery signaling', color: '#E60023' },
-        { id: 'common', name: 'CommonCrawl', desc: 'Open data crawling', color: '#B0B0B0' }
+        { id: 'common', name: 'CommonCrawl', desc: 'Open data crawling', color: '#B0B0B0' },
+        { id: 'anthropic', name: 'ClaudeBot', desc: 'AI crawler for Claude', color: '#D97757' }
     ];
+
+    const userAgents = [
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.105 Mobile Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+        "Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1"
+    ];
+
+    const devices = ["Mobile (iPhone)", "Mobile (Android)", "Desktop (Chrome)", "Desktop (Edge)", "Tablet (iPad)"];
 
     const [userBalance, setUserBalance] = useState(0);
 
@@ -164,7 +176,13 @@ export default function IndexingPanel() {
                 let newLogs = [];
                 urls.forEach(url => {
                     selectedBots.forEach(bot => {
-                        newLogs.push(`[${timestamp}] --- PING --- ${bot.toUpperCase()} SERVICE --- Node Dispatched to ${url}`);
+                        // Rotation Logic: Select random device and UA for each signal
+                        const randIdx = Math.floor(Math.random() * userAgents.length);
+                        const ua = userAgents[randIdx];
+                        const device = devices[randIdx];
+
+                        newLogs.push(`[${timestamp}] --- PING --- ${bot.toUpperCase()} SERVICE --- Node Dispatched (Device: ${device})`);
+                        newLogs.push(`[${timestamp}] --- SIGNAL --- UA: ${ua.substring(0, 45)}...`);
                     });
                     if (pingEnabled) {
                         newLogs.push(`[${timestamp}] --- BROADCAST --- Pinging Indexing Nodes (${pingCycles} cycles) for ${url}`);
