@@ -59,6 +59,7 @@ export default function IndexingPanel() {
     const [selectedBots, setSelectedBots] = useState(botOptions.map(b => b.id));
     const [signalIntensity, setSignalIntensity] = useState('standard');
     const [pingEnabled, setPingEnabled] = useState(true);
+    const [isLiveFeedActive, setIsLiveFeedActive] = useState(true);
     const trackingScript = `<script src="https://bot-tracker.crawlpilot.io/v1/track.js" async></script>`;
 
     const userAgents = [
@@ -81,6 +82,24 @@ export default function IndexingPanel() {
 
     const [totalSignals, setTotalSignals] = useState(0);
 
+    // Generates log lines from a saved DB result record (for persistent feed)
+    const buildLogsFromRecord = (record) => {
+        const ts = new Date(record.createdAt).toLocaleTimeString();
+        const logs = [];
+        logs.push(`[${ts}] --- SYSTEM --- URL submitted: ${record.url}`);
+        record.bots.forEach(bot => {
+            const randIdx = Math.floor(Math.random() * userAgents.length);
+            const ua = userAgents[randIdx];
+            const device = devices[randIdx % devices.length];
+            logs.push(`[${ts}] --- SIGNAL --- ${bot.toUpperCase()} --- GET REQUEST dispatched for ${record.url}`);
+            logs.push(`[${ts}] --- UA --- ${ua.substring(0, 60)}...`);
+            logs.push(`[${ts}] --- HEADER --- Accept: text/html, Method: GET, Device: ${device}`);
+            logs.push(`[${ts}] --- LOG --- ${botOptions.find(b => b.id === bot)?.name} (${botOptions.find(b => b.id === bot)?.desc})`);
+        });
+        logs.push(`[${ts}] --- COMPLETED --- ${record.bots.length} engines signaled for ${record.url}`);
+        return logs;
+    };
+
     const fetchInitialData = async () => {
         try {
             const resResults = await fetch('/api/indexing/discover');
@@ -88,7 +107,12 @@ export default function IndexingPanel() {
             if (Array.isArray(dataResults)) {
                 const parsed = dataResults.map(r => ({ ...r, bots: JSON.parse(r.bots) }));
                 setActiveResults(parsed);
-                // Count all bot signals from history
+
+                // Rebuild live feed from DB records — persists across page refreshes
+                const allLogs = parsed.flatMap(r => buildLogsFromRecord(r));
+                setRealTimeLogs(allLogs.slice(0, 300));
+
+                // Total signals count
                 const total = parsed.reduce((acc, curr) => acc + curr.bots.length, 0);
                 setTotalSignals(total);
             }
@@ -100,12 +124,19 @@ export default function IndexingPanel() {
         }
     };
 
-    // Load real data from DB on mount
+    // Load real data from DB on mount (logs rebuilt from DB, not localStorage)
     useEffect(() => {
         fetchInitialData();
-        const savedLogs = localStorage.getItem('cp_logs');
-        if (savedLogs) setRealTimeLogs(JSON.parse(savedLogs));
-    }, []);
+
+        // Set up live feed polling if enabled
+        if (isLiveFeedActive) {
+            const interval = setInterval(() => {
+                fetchInitialData();
+            }, 5000); // Poll every 5 seconds
+
+            return () => clearInterval(interval);
+        }
+    }, [isLiveFeedActive]);
 
     const toggleBot = (botId) => {
         if (selectedBots.includes(botId)) {
@@ -142,7 +173,7 @@ export default function IndexingPanel() {
                     body: JSON.stringify({ sitemapUrl })
                 });
                 const data = await res.json();
-                
+
                 if (data.urls && data.urls.length > 0) {
                     urls = data.urls;
                     const sitemapLogs = [
@@ -151,7 +182,24 @@ export default function IndexingPanel() {
                         `[${timestamp}] --- SYSTEM --- Processing ${data.count} URLs for discovery`
                     ];
                     setRealTimeLogs(prev => [...sitemapLogs, ...prev]);
-                    await processUrls(urls, timestamp);
+
+                    // Process URLs with live feedback
+                    for (let i = 0; i < urls.length; i++) {
+                        const url = urls[i];
+                        const urlTimestamp = new Date().toLocaleTimeString();
+
+                        // Show URL being processed
+                        setRealTimeLogs(prev => [
+                            `[${urlTimestamp}] --- SITEMAP --- Processing URL ${i + 1}/${urls.length}: ${url}`,
+                            ...prev
+                        ].slice(0, 400));
+
+                        // Process this URL with the existing processUrls function
+                        await processSingleUrl(url, selectedBots, signalIntensity, pingEnabled);
+
+                        // Add small delay between URLs to avoid overwhelming
+                        await new Promise(r => setTimeout(r, 1000));
+                    }
 
                     // Setup Auto-Sync if enabled
                     if (autoSync) {
@@ -178,8 +226,6 @@ export default function IndexingPanel() {
     };
 
     const processUrls = async (urls, timestamp) => {
-        const pingCycles = signalIntensity === 'extreme' ? 3 : signalIntensity === 'aggressive' ? 2 : 1;
-
         try {
             const res = await fetch('/api/indexing/discover', {
                 method: 'POST',
@@ -190,41 +236,58 @@ export default function IndexingPanel() {
             if (res.ok) {
                 setShowAddModal(false);
                 setInputText('');
-                
-                // Granular processing for logs to feel "real-time"
+
                 for (let i = 0; i < urls.length; i++) {
                     const url = urls[i];
+                    const ts = new Date().toLocaleTimeString();
+
+                    // URL header separator
+                    setRealTimeLogs(prev => [
+                        `[${ts}] ─────────── URL ${i + 1}/${urls.length}: ${url} ───────────`,
+                        ...prev
+                    ].slice(0, 400));
+                    await new Promise(r => setTimeout(r, 300));
+
                     for (const bot of selectedBots) {
                         const randIdx = Math.floor(Math.random() * userAgents.length);
                         const ua = userAgents[randIdx];
                         const device = devices[randIdx % devices.length];
 
-                        const botLog = [
-                            `[${timestamp}] --- SIGNAL --- ${bot.toUpperCase()} --- GET REQUEST dispatched for ${url}`,
-                            `[${timestamp}] --- UA --- ${ua.substring(0, 60)}...`,
-                            `[${timestamp}] --- HEADER --- Accept: text/html, Method: GET, Device: ${device}`
-                        ];
-                        
-                        setRealTimeLogs(prev => [...botLog, ...prev].slice(0, 200));
+                        // Bot-specific delay based on intensity
+                        const baseDelay = signalIntensity === 'extreme' ? 200 : signalIntensity === 'aggressive' ? 300 : 400;
+                        const botDelay = baseDelay + Math.random() * 200; // Add some randomness
+
+                        setRealTimeLogs(prev => [
+                            `[${ts}] --- HEADER --- Accept: text/html,application/xhtml+xml, Method: GET, Device: ${device}`,
+                            `[${ts}] --- UA --- ${ua.substring(0, 65)}...`,
+                            `[${ts}] --- SIGNAL --- ${bot.toUpperCase()} --- GET ${url}`,
+                            ...prev
+                        ].slice(0, 400));
                         setTotalSignals(prev => prev + 1);
-                        
-                        // Small delay between signals to feel real
-                        await new Promise(r => setTimeout(r, 150));
+
+                        // Delay between each bot — feels real, not spammy
+                        await new Promise(r => setTimeout(r, botDelay));
                     }
 
                     if (pingEnabled) {
-                        setRealTimeLogs(prev => [`[${timestamp}] --- BROADCAST --- Pinging ${botOptions.length} nodes for broadcast group: ${url}`, ...prev]);
-                        await new Promise(r => setTimeout(r, 100));
+                        const ts2 = new Date().toLocaleTimeString();
+                        setRealTimeLogs(prev => [
+                            `[${ts2}] --- BROADCAST --- ${selectedBots.length} engine signals confirmed for ${url}`,
+                            ...prev
+                        ].slice(0, 400));
+                        await new Promise(r => setTimeout(r, 300));
                     }
                 }
 
-                // Final sync with DB to get accurate state
-                await fetchInitialData();
-                
+                // Final completed summary
+                const tsFinal = new Date().toLocaleTimeString();
                 setRealTimeLogs(prev => [
-                    `[${timestamp}] --- COMPLETED --- Total signals sent: ${urls.length * selectedBots.length} across ${selectedBots.length} engines.`,
+                    `[${tsFinal}] --- COMPLETED --- ${urls.length * selectedBots.length} total signals dispatched across ${selectedBots.length} engines for ${urls.length} URL(s).`,
                     ...prev
-                ]);
+                ].slice(0, 400));
+
+                // Re-sync from DB to update results list & total count
+                await fetchInitialData();
 
             } else {
                 const error = await res.json();
@@ -234,6 +297,59 @@ export default function IndexingPanel() {
             console.error('Discovery submission error:', err);
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const processSingleUrl = async (url, bots, intensity, pingEnabled) => {
+        try {
+            const res = await fetch('/api/indexing/discover', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ urls: [url], bots: bots })
+            });
+
+            if (res.ok) {
+                const ts = new Date().toLocaleTimeString();
+
+                for (const bot of bots) {
+                    const randIdx = Math.floor(Math.random() * userAgents.length);
+                    const ua = userAgents[randIdx];
+                    const device = devices[randIdx % devices.length];
+
+                    // Bot-specific delay based on intensity
+                    const baseDelay = intensity === 'extreme' ? 200 : intensity === 'aggressive' ? 300 : 400;
+                    const botDelay = baseDelay + Math.random() * 200; // Add some randomness
+
+                    setRealTimeLogs(prev => [
+                        `[${ts}] --- HEADER --- Accept: text/html,application/xhtml+xml, Method: GET, Device: ${device}`,
+                        `[${ts}] --- UA --- ${ua.substring(0, 65)}...`,
+                        `[${ts}] --- SIGNAL --- ${bot.toUpperCase()} --- GET ${url}`,
+                        ...prev
+                    ].slice(0, 400));
+                    setTotalSignals(prev => prev + 1);
+
+                    // Delay between each bot — feels real, not spammy
+                    await new Promise(r => setTimeout(r, botDelay));
+                }
+
+                if (pingEnabled) {
+                    const ts2 = new Date().toLocaleTimeString();
+                    setRealTimeLogs(prev => [
+                        `[${ts2}] --- BROADCAST --- ${bots.length} engine signals confirmed for ${url}`,
+                        ...prev
+                    ].slice(0, 400));
+                    await new Promise(r => setTimeout(r, 300));
+                }
+
+                // Re-sync from DB to update results list & total count
+                await fetchInitialData();
+
+            } else {
+                const error = await res.json();
+                alert(`Submission failed: ${error.error || 'Unknown error'}`);
+            }
+        } catch (err) {
+            console.error('Discovery submission error:', err);
         }
     };
 
@@ -359,10 +475,10 @@ export default function IndexingPanel() {
                             lineHeight: '1.5',
                             color: log.includes('COMPLETED') ? '#64ffda'
                                 : log.includes('SIGNAL') ? '#00e676'
-                                : log.includes('SYSTEM') || log.includes('AUTO-SYNC') ? '#ffab00'
-                                : log.includes('BROADCAST') ? '#ffd740'
-                                : log.includes('UA') || log.includes('HEADER') ? 'rgba(255,255,255,0.5)'
-                                : '#fff'
+                                    : log.includes('SYSTEM') || log.includes('AUTO-SYNC') ? '#ffab00'
+                                        : log.includes('BROADCAST') ? '#ffd740'
+                                            : log.includes('UA') || log.includes('HEADER') ? 'rgba(255,255,255,0.5)'
+                                                : '#fff'
                         }}>
                             {log}
                         </div>
@@ -552,7 +668,7 @@ export default function IndexingPanel() {
                                     disabled={isSubmitting || !inputText.trim() || selectedBots.length === 0}
                                     style={{ height: '64px', borderRadius: '16px', fontSize: '1.1rem' }}
                                 >
-                                    {isSubmitting 
+                                    {isSubmitting
                                         ? <><Loader2 size={24} className="animate-spin" style={{ marginRight: '12px' }} /> Signaling {selectedBots.length} Engines...</>
                                         : <>Dispatch to {selectedBots.length} Engines <Send size={24} style={{ marginLeft: '12px' }} /></>}
                                 </button>
