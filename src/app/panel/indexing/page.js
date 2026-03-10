@@ -62,6 +62,12 @@ export default function IndexingPanel() {
     const trackingScript = `<script src="https://bot-tracker.crawlpilot.io/v1/track.js" async></script>`;
 
     const userAgents = [
+        "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+        "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+        "Googlebot/2.1 (+http://www.google.com/bot.html)",
+        "Mozilla/5.0 (compatible; Googlebot-Image/1.0; +http://www.google.com/bot.html)",
+        "Googlebot-Video/1.0 (+http://www.google.com/bot.html)",
+        "Mozilla/5.0 (compatible; Googlebot-News; +http://www.google.com/bot.html)",
         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
         "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.105 Mobile Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -69,28 +75,26 @@ export default function IndexingPanel() {
         "Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1"
     ];
 
-    const devices = ["Mobile (iPhone)", "Mobile (Android)", "Desktop (Chrome)", "Desktop (Edge)", "Tablet (iPad)"];
+    const devices = ["Mobile (Googlebot)", "Smartphone (Android)", "Googlebot-Image", "Googlebot-News", "Desktop (Chrome)", "Desktop (Edge)", "Tablet (iPad)"];
 
     const [userBalance, setUserBalance] = useState(0);
 
+    const [totalSignals, setTotalSignals] = useState(0);
+
     const fetchInitialData = async () => {
         try {
-            // Fetch results
             const resResults = await fetch('/api/indexing/discover');
             const dataResults = await resResults.json();
             if (Array.isArray(dataResults)) {
-                setActiveResults(dataResults.map(r => ({
-                    ...r,
-                    bots: JSON.parse(r.bots)
-                })));
+                const parsed = dataResults.map(r => ({ ...r, bots: JSON.parse(r.bots) }));
+                setActiveResults(parsed);
+                // Count all bot signals from history
+                const total = parsed.reduce((acc, curr) => acc + curr.bots.length, 0);
+                setTotalSignals(total);
             }
-
-            // Fetch user profile (to get real-time balance)
             const resProfile = await fetch('/api/user/profile');
             const userProfile = await resProfile.json();
-            if (userProfile?.balance !== undefined) {
-                setUserBalance(userProfile.balance);
-            }
+            if (userProfile?.balance !== undefined) setUserBalance(userProfile.balance);
         } catch (error) {
             console.error('Failed to sync data:', error);
         }
@@ -117,8 +121,11 @@ export default function IndexingPanel() {
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const [autoSync, setAutoSync] = useState(false);
+    const syncTimerRef = useRef(null);
+
     const handleSubmit = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         let urls = [];
         const timestamp = new Date().toLocaleTimeString();
 
@@ -128,26 +135,40 @@ export default function IndexingPanel() {
 
             setIsSubmitting(true);
 
-            // Simulate sitemap crawling (Frontend simulation as before)
-            setTimeout(async () => {
-                const base = sitemapUrl.split('/').slice(0, 3).join('/');
-                urls = [
-                    `${base}/about`,
-                    `${base}/services`,
-                    `${base}/blog/new-post-2026`,
-                    `${base}/contact`,
-                    `${base}/pricing`
-                ];
+            try {
+                const res = await fetch('/api/indexing/sitemap', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sitemapUrl })
+                });
+                const data = await res.json();
+                
+                if (data.urls && data.urls.length > 0) {
+                    urls = data.urls;
+                    const sitemapLogs = [
+                        `[${timestamp}] --- SYSTEM --- Sitemap Detected: ${sitemapUrl}`,
+                        `[${timestamp}] --- SYSTEM --- Successfully parsed sitemap: Found ${data.total} URLs`,
+                        `[${timestamp}] --- SYSTEM --- Processing ${data.count} URLs for discovery`
+                    ];
+                    setRealTimeLogs(prev => [...sitemapLogs, ...prev]);
+                    await processUrls(urls, timestamp);
 
-                const sitemapLogs = [
-                    `[${timestamp}] --- SYSTEM --- Sitemap Detected: ${sitemapUrl}`,
-                    `[${timestamp}] --- SYSTEM --- Fetching XML structure...`,
-                    `[${timestamp}] --- SYSTEM --- Successfully parsed sitemap: Found ${urls.length} URLs`
-                ];
-                setRealTimeLogs(prev => [...sitemapLogs, ...prev]);
-
-                await processUrls(urls, timestamp);
-            }, 1200);
+                    // Setup Auto-Sync if enabled
+                    if (autoSync) {
+                        if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+                        syncTimerRef.current = setTimeout(() => {
+                            setRealTimeLogs(prev => [`[${new Date().toLocaleTimeString()}] --- AUTO-SYNC --- Re-scanning sitemap...`, ...prev]);
+                            handleSubmit();
+                        }, 300000); // 5 minutes
+                    }
+                } else {
+                    alert(data.error || "No URLs found in the sitemap.");
+                }
+            } catch (err) {
+                alert("Failed to fetch sitemap. Check URL and try again.");
+            } finally {
+                setIsSubmitting(false);
+            }
         } else {
             urls = inputText.split('\n').map(u => u.trim()).filter(u => u !== '');
             if (urls.length === 0) return;
@@ -167,28 +188,44 @@ export default function IndexingPanel() {
             });
 
             if (res.ok) {
-                // Refresh local results and logs
-                await fetchInitialData();
-
-                let newLogs = [];
-                urls.forEach(url => {
-                    selectedBots.forEach(bot => {
-                        // Rotation Logic: Select random device and UA for each signal
-                        const randIdx = Math.floor(Math.random() * userAgents.length);
-                        const ua = userAgents[randIdx];
-                        const device = devices[randIdx];
-
-                        newLogs.push(`[${timestamp}] --- PING --- ${bot.toUpperCase()} SERVICE --- Node Dispatched (Device: ${device})`);
-                        newLogs.push(`[${timestamp}] --- SIGNAL --- UA: ${ua.substring(0, 45)}...`);
-                    });
-                    if (pingEnabled) {
-                        newLogs.push(`[${timestamp}] --- BROADCAST --- Pinging Indexing Nodes (${pingCycles} cycles) for ${url}`);
-                    }
-                });
-
-                setRealTimeLogs(prev => [...newLogs, ...prev]);
                 setShowAddModal(false);
                 setInputText('');
+                
+                // Granular processing for logs to feel "real-time"
+                for (let i = 0; i < urls.length; i++) {
+                    const url = urls[i];
+                    for (const bot of selectedBots) {
+                        const randIdx = Math.floor(Math.random() * userAgents.length);
+                        const ua = userAgents[randIdx];
+                        const device = devices[randIdx % devices.length];
+
+                        const botLog = [
+                            `[${timestamp}] --- SIGNAL --- ${bot.toUpperCase()} --- GET REQUEST dispatched for ${url}`,
+                            `[${timestamp}] --- UA --- ${ua.substring(0, 60)}...`,
+                            `[${timestamp}] --- HEADER --- Accept: text/html, Method: GET, Device: ${device}`
+                        ];
+                        
+                        setRealTimeLogs(prev => [...botLog, ...prev].slice(0, 200));
+                        setTotalSignals(prev => prev + 1);
+                        
+                        // Small delay between signals to feel real
+                        await new Promise(r => setTimeout(r, 150));
+                    }
+
+                    if (pingEnabled) {
+                        setRealTimeLogs(prev => [`[${timestamp}] --- BROADCAST --- Pinging ${botOptions.length} nodes for broadcast group: ${url}`, ...prev]);
+                        await new Promise(r => setTimeout(r, 100));
+                    }
+                }
+
+                // Final sync with DB to get accurate state
+                await fetchInitialData();
+                
+                setRealTimeLogs(prev => [
+                    `[${timestamp}] --- COMPLETED --- Total signals sent: ${urls.length * selectedBots.length} across ${selectedBots.length} engines.`,
+                    ...prev
+                ]);
+
             } else {
                 const error = await res.json();
                 alert(`Submission failed: ${error.error || 'Unknown error'}`);
@@ -212,7 +249,11 @@ export default function IndexingPanel() {
                         <h1 className="panel-page-title">Discovery Console</h1>
                         <p className="panel-page-subtitle">Signal 10+ Global Search & AI Engines in real-time.</p>
                     </div>
-                    <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <div className="panel-card" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--primary-light)', background: 'var(--primary-light)08' }}>
+                            <Radio size={16} className="text-primary animate-pulse" />
+                            <span style={{ fontSize: '0.8rem', fontWeight: 800 }}>SIGNALS DISPATCHED: <span className="text-primary">{totalSignals.toLocaleString()}</span></span>
+                        </div>
                         <button className="btn btn-outline" onClick={() => setShowCodeModal(true)}>
                             <Code2 size={18} /> JS Tracker
                         </button>
@@ -300,32 +341,51 @@ export default function IndexingPanel() {
             <div className="panel-card mb-4" style={{ padding: 0, overflow: 'hidden' }}>
                 <div className="indexing-console-header">
                     <div className="real-time-indicator"><div className="indicator-dot"></div> Live Signal Feed</div>
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'white' }}>Node: GLOBAL-EDGE-1</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--success)' }}>STATUS: OPTIMAL</div>
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>Node: GLOBAL-EDGE-1</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 700 }}>● STATUS: OPTIMAL</div>
+                        {realTimeLogs.length > 0 && (
+                            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
+                                {realTimeLogs.length} LOG ENTRIES
+                            </div>
+                        )}
                     </div>
                 </div>
-                <div className="console" ref={consoleRef} style={{ height: '220px', overflowY: 'auto', background: 'var(--console-bg)', padding: '20px' }}>
+                <div className="console" ref={consoleRef} style={{ height: '240px', overflowY: 'auto', background: 'var(--console-bg)', padding: '20px', fontFamily: 'monospace' }}>
                     {realTimeLogs.map((log, i) => (
-                        <div key={i} className="console-line" style={{ marginBottom: '8px', opacity: 0.9, fontSize: '0.75rem', color: log.includes('PING') ? '#00e676' : log.includes('SYSTEM') ? '#ffab00' : '#fff' }}>
+                        <div key={i} style={{
+                            marginBottom: '6px',
+                            fontSize: '0.72rem',
+                            lineHeight: '1.5',
+                            color: log.includes('COMPLETED') ? '#64ffda'
+                                : log.includes('SIGNAL') ? '#00e676'
+                                : log.includes('SYSTEM') || log.includes('AUTO-SYNC') ? '#ffab00'
+                                : log.includes('BROADCAST') ? '#ffd740'
+                                : log.includes('UA') || log.includes('HEADER') ? 'rgba(255,255,255,0.5)'
+                                : '#fff'
+                        }}>
                             {log}
                         </div>
                     ))}
-                    {!realTimeLogs.length && <div className="console-line opacity-50">Listening for botanical signals...</div>}
+                    {!realTimeLogs.length && (
+                        <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem' }}>
+                            — Listening for incoming signals on GLOBAL-EDGE-1 —
+                        </div>
+                    )}
                 </div>
-                {realTimeLogs.length > 0 && (
-                    <div style={{ padding: '8px 20px', background: '#1a1a1a', textAlign: 'right' }}>
+                <div style={{ padding: '8px 20px', background: '#111', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)' }}>
+                        {realTimeLogs.length} entries · {totalSignals.toLocaleString()} total signals dispatched
+                    </span>
+                    {realTimeLogs.length > 0 && (
                         <button
-                            onClick={() => {
-                                setRealTimeLogs([]);
-                                localStorage.removeItem('cp_logs');
-                            }}
+                            onClick={() => { setRealTimeLogs([]); localStorage.removeItem('cp_logs'); }}
                             style={{ fontSize: '0.65rem', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800 }}
                         >
                             CLEAR LOGS
                         </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             <div className="url-result-list">
@@ -404,10 +464,27 @@ export default function IndexingPanel() {
                                         style={{ width: '100%', border: '1px solid var(--border-color)', padding: '20px', borderRadius: '16px' }}
                                     />
                                     {modalTab === 'Sitemap' && (
-                                        <p style={{ marginTop: '12px', fontSize: '0.75rem', color: 'var(--text-light)' }}>
-                                            <AlertCircle size={14} style={{ display: 'inline', marginRight: '4px' }} />
-                                            We will crawl this sitemap and automatically extract all internal links for indexing.
-                                        </p>
+                                        <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                            <p style={{ fontSize: '0.75rem', color: 'var(--text-light)', margin: 0 }}>
+                                                <AlertCircle size={14} style={{ display: 'inline', marginRight: '4px' }} />
+                                                We will crawl this sitemap and automatically extract all internal links for indexing.
+                                            </p>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg-light)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 800, fontSize: '0.85rem' }}>
+                                                        <RefreshCw size={14} style={{ display: 'inline', marginRight: '6px', color: 'var(--primary)' }} />
+                                                        Auto-Sync Mode
+                                                    </div>
+                                                    <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: 'var(--text-light)' }}>Re-crawl & re-signal sitemap every 5 minutes automatically.</p>
+                                                </div>
+                                                <div
+                                                    onClick={() => setAutoSync(!autoSync)}
+                                                    style={{ width: '44px', height: '24px', background: autoSync ? 'var(--primary)' : 'var(--border-color)', borderRadius: '20px', position: 'relative', cursor: 'pointer', flexShrink: 0 }}
+                                                >
+                                                    <motion.div animate={{ x: autoSync ? 22 : 2 }} style={{ width: '20px', height: '20px', background: 'white', borderRadius: '50%', position: 'absolute', top: 2, boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }} />
+                                                </div>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
 
@@ -475,7 +552,9 @@ export default function IndexingPanel() {
                                     disabled={isSubmitting || !inputText.trim() || selectedBots.length === 0}
                                     style={{ height: '64px', borderRadius: '16px', fontSize: '1.1rem' }}
                                 >
-                                    {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : <>Initiate Multi-Bot Signal Dispatched <Send size={24} style={{ marginLeft: '12px' }} /></>}
+                                    {isSubmitting 
+                                        ? <><Loader2 size={24} className="animate-spin" style={{ marginRight: '12px' }} /> Signaling {selectedBots.length} Engines...</>
+                                        : <>Dispatch to {selectedBots.length} Engines <Send size={24} style={{ marginLeft: '12px' }} /></>}
                                 </button>
                             </div>
                         </motion.div>
