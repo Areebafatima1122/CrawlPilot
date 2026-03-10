@@ -16,9 +16,12 @@ export const metadata = {
     template: "%s | Crawl Pilot",
   },
   description: "Crawl Pilot accelerates Google, Bing, and ChatGPT indexing with real-time crawl monitoring and detailed bot logs. Get your content discovered by search engines instantly.",
-  keywords: ["backlink indexer", "fast indexing", "Google indexing", "Bing indexing", "SEO", "URL indexer", "crawl monitoring"],
-  authors: [{ name: "Crawl Pilot" }],
+  keywords: ["backlink indexer", "fast indexing", "Google indexing", "Bing indexing", "SEO", "URL indexer", "crawl monitoring", "backlink indexing service", "instant indexing", "SEO automation", "AEO", "GEO"],
+  authors: [{ name: "Crawl Pilot", url: "https://crawlpilot.io" }],
   metadataBase: new URL('https://crawlpilot.io'),
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -26,16 +29,36 @@ export const metadata = {
     siteName: "Crawl Pilot",
     title: "Crawl Pilot - #1 Backlink Indexer & Fast URL Indexing Service",
     description: "Crawl Pilot accelerates Google, Bing, and ChatGPT indexing with real-time crawl monitoring and detailed bot logs.",
+    images: [
+      {
+        url: "/og-image.png", // We should create or provide this
+        width: 1200,
+        height: 630,
+        alt: "Crawl Pilot - Instant Search Engine Indexing",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Crawl Pilot - #1 Backlink Indexer",
     description: "Crawl Pilot accelerates your indexing with real-time crawl monitoring.",
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
+  verification: {
+    google: "krhojpmmBI7crq1rvyGST27wZME_h2xocbZwE17wXVM",
+  },
+  category: 'SEO Tool',
 };
 
 export default function RootLayout({ children }) {
@@ -46,21 +69,65 @@ export default function RootLayout({ children }) {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "Organization",
-              name: "Crawl Pilot",
-              url: "https://crawlpilot.io",
-              description: "Fast URL indexing service for Google, Bing, and ChatGPT",
-              address: {
-                "@type": "PostalAddress",
-                streetAddress: "400 Harbour Pl Dr",
-                addressLocality: "Tampa",
-                addressRegion: "FL",
-                postalCode: "33602",
-                addressCountry: "US",
+            __html: JSON.stringify([
+              {
+                "@context": "https://schema.org",
+                "@type": "SoftwareApplication",
+                "name": "Crawl Pilot",
+                "operatingSystem": "All",
+                "applicationCategory": "SEOApplication",
+                "description": "Fast URL indexing service for Google, Bing, and ChatGPT",
+                "offers": {
+                  "@type": "Offer",
+                  "price": "0",
+                  "priceCurrency": "USD"
+                }
               },
-            }),
+              {
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "name": "URL Indexing Service",
+                "serviceType": "SEO Optimization",
+                "provider": {
+                  "@type": "Organization",
+                  "name": "Crawl Pilot"
+                },
+                "description": "Accelerates search engine crawling and indexing for URLs and backlinks.",
+                "offers": {
+                  "@type": "Offer",
+                  "price": "0.00",
+                  "priceCurrency": "USD",
+                  "description": "Start with 100 free URL indexing credits"
+                }
+              },
+              {
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                "name": "Crawl Pilot",
+                "url": "https://crawlpilot.io",
+                "logo": "https://crawlpilot.io/logo.png",
+                "description": "Fast URL indexing service for Google, Bing, and ChatGPT",
+                "address": {
+                  "@type": "PostalAddress",
+                  "streetAddress": "400 Harbour Pl Dr",
+                  "addressLocality": "Tampa",
+                  "addressRegion": "FL",
+                  "postalCode": "33602",
+                  "addressCountry": "US",
+                },
+              },
+              {
+                "@context": "https://schema.org",
+                "@type": "WebSite",
+                "name": "Crawl Pilot",
+                "url": "https://crawlpilot.io",
+                "potentialAction": {
+                  "@type": "SearchAction",
+                  "target": "https://crawlpilot.io/blog?q={search_term_string}",
+                  "query-input": "required name=search_term_string"
+                }
+              }
+            ]),
           }}
         />
       </head>
