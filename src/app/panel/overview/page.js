@@ -20,6 +20,8 @@ export default function OverviewPage() {
         delivered: 0,
         botSignals: 0
     });
+    const [bars, setBars] = useState([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const [recentResults, setRecentResults] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -41,8 +43,30 @@ export default function OverviewPage() {
                         balance: profile.balance || 0,
                         used: usedCount,
                         delivered: deliveredCount,
-                        botSignals: usedCount * 3 // Mocked multiplier for "signals"
+                        botSignals: usedCount * 12 // Signals = URLs * Bots (approx)
                     });
+
+                    if (Array.isArray(results)) {
+                        // Calculate bars for last 14 days
+                        const dailyStats = new Array(14).fill(0);
+                        const today = new Date();
+
+                        results.forEach(r => {
+                            const date = new Date(r.createdAt);
+                            const diffDays = Math.floor((today - date) / (1000 * 60 * 60 * 24));
+                            if (diffDays >= 0 && diffDays < 14) {
+                                dailyStats[13 - diffDays]++;
+                            }
+                        });
+
+                        // Maximize height (relative to highest peak)
+                        const maxVal = Math.max(...dailyStats);
+                        const relativeBars = dailyStats.map(v => maxVal === 0 ? 0 : Math.max(15, (v / maxVal) * 80));
+                        setBars(relativeBars);
+
+                        // Recent results
+                        setRecentResults(results.slice(0, 3));
+                    }
                 }
             } catch (err) {
                 console.error("Failed to load overview data:", err);
@@ -53,9 +77,6 @@ export default function OverviewPage() {
 
         fetchStats();
     }, []);
-
-    // Zeroed out bars for clean state
-    const bars = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
     return (
         <>
@@ -126,9 +147,11 @@ export default function OverviewPage() {
                             />
                         ))}
                         {/* If all 0, show a subtle prompt */}
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justify: 'center' }}>
-                            <p className="text-xs text-muted" style={{ background: 'white', padding: '4px 12px', borderRadius: '12px' }}>Awaiting initial discovery data...</p>
-                        </div>
+                        {!isLoading && bars.every(h => h === 0) && (
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justify: 'center' }}>
+                                <p className="text-xs text-muted" style={{ background: 'white', padding: '4px 12px', borderRadius: '12px' }}>Awaiting initial discovery data...</p>
+                            </div>
+                        )}
                     </div>
                     <div className="chart-labels">
                         {['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14'].map(day => (
@@ -146,10 +169,23 @@ export default function OverviewPage() {
                 </div>
                 <div className="panel-card">
                     <h3 className="mb-3">Latest Bot Deliveries</h3>
-                    <div className="empty-state" style={{ padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '120px' }}>
-                        <Activity size={32} color="var(--border-color)" className="mb-2" />
-                        <p className="text-sm text-muted">No activity recorded for this period.</p>
-                    </div>
+                    {recentResults.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {recentResults.map((res, i) => (
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'var(--bg-light)', borderRadius: '12px' }}>
+                                    <div style={{ wordBreak: 'break-all', fontSize: '0.8rem', fontWeight: 600 }}>
+                                        {res.url.substring(0, 30)}{res.url.length > 30 ? '...' : ''}
+                                    </div>
+                                    <div className="badge badge-success" style={{ fontSize: '0.7rem' }}>Live</div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="empty-state" style={{ padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '120px' }}>
+                            <Activity size={32} color="var(--border-color)" className="mb-2" />
+                            <p className="text-sm text-muted">No activity recorded for this period.</p>
+                        </div>
+                    )}
                 </div>
             </div>
         </>
