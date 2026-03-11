@@ -70,9 +70,13 @@ export default function IndexingPanel() {
     // User plan and bot access
     const [userPlan, setUserPlan] = useState('free');
     const [allowedBots, setAllowedBots] = useState(['google']);
+    const [canAddLinks, setCanAddLinks] = useState(false);
     const [web2Links, setWeb2Links] = useState([]);
     const [selectedWeb2Links, setSelectedWeb2Links] = useState([]);
     const [showWeb2Section, setShowWeb2Section] = useState(false);
+    const [showAddLinksModal, setShowAddLinksModal] = useState(false);
+    const [selectedResultForLinks, setSelectedResultForLinks] = useState(null);
+    const [newLinkUrl, setNewLinkUrl] = useState('');
 
     const userAgents = [
         "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
@@ -158,6 +162,11 @@ export default function IndexingPanel() {
             console.log('Fetched allowedBots:', bots); // Debug log
             setAllowedBots(bots);
             setSelectedBots(bots);
+            
+            // Handle canAddLinks permission
+            if (userProfile?.canAddLinks !== undefined) {
+                setCanAddLinks(userProfile.canAddLinks);
+            }
             
         } catch (error) {
             console.error('Failed to sync data:', error);
@@ -519,6 +528,43 @@ export default function IndexingPanel() {
         if (consoleRef.current) consoleRef.current.scrollTop = 0;
     }, [realTimeLogs]);
 
+    // Add Links functionality
+    const openAddLinksModal = (result) => {
+        if (!canAddLinks) {
+            alert('Upgrade to Pro plan to add links!');
+            return;
+        }
+        setSelectedResultForLinks(result);
+        setNewLinkUrl('');
+        setShowAddLinksModal(true);
+    };
+
+    const handleAddLink = async () => {
+        if (!newLinkUrl.trim()) return;
+        
+        try {
+            const res = await fetch('/api/indexing/links', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    resultId: selectedResultForLinks.id, 
+                    url: newLinkUrl 
+                })
+            });
+
+            if (res.ok) {
+                setNewLinkUrl('');
+                setShowAddLinksModal(false);
+                await fetchInitialData();
+            } else {
+                alert('Failed to add link');
+            }
+        } catch (error) {
+            console.error('Failed to add link:', error);
+            alert('Failed to add link');
+        }
+    };
+
     return (
         <div className="indexing-panel">
             <div className="panel-page-header">
@@ -542,7 +588,7 @@ export default function IndexingPanel() {
                 </div>
             </div>
 
-            <div className="grid grid-3 gap-4 mb-4">
+            <div className="grid grid-3 gap-4 mb-4" style={{ '--grid-cols': 3 }}>
                 <div className="panel-card" style={{ padding: '20px' }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', color: 'var(--primary)' }}>
                         <Zap size={18} /> <span style={{ fontWeight: 800, fontSize: '0.8rem' }}>INTENSITY</span>
@@ -600,6 +646,38 @@ export default function IndexingPanel() {
                     </div>
                 </div>
             </div>
+
+            {/* Responsive CSS */}
+            <style jsx>{`
+                @media (max-width: 768px) {
+                    .grid-3 {
+                        grid-template-columns: 1fr !important;
+                    }
+                    .indexing-filters {
+                        flex-direction: column;
+                        align-items: stretch;
+                    }
+                    .filter-group {
+                        max-width: 100% !important;
+                    }
+                    .panel-page-header > div {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 16px;
+                    }
+                    .console {
+                        height: 180px !important;
+                    }
+                }
+                @media (max-width: 480px) {
+                    .panel-page-title {
+                        font-size: 1.25rem;
+                    }
+                    .panel-card {
+                        padding: 16px !important;
+                    }
+                }
+            `}</style>
 
             <div className="indexing-filters">
                 <div className="filter-group">
@@ -707,6 +785,8 @@ export default function IndexingPanel() {
                                     );
                                 })}
                                 <button
+                                    onClick={() => canAddLinks ? openAddLinksModal(res) : alert('Upgrade to add links!')}
+                                    disabled={!canAddLinks}
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
@@ -714,15 +794,17 @@ export default function IndexingPanel() {
                                         padding: '6px 12px',
                                         borderRadius: '8px',
                                         border: 'none',
-                                        background: 'var(--primary)',
+                                        background: canAddLinks ? 'var(--primary)' : '#ccc',
                                         color: 'white',
-                                        cursor: 'pointer',
+                                        cursor: canAddLinks ? 'pointer' : 'not-allowed',
                                         fontSize: '0.75rem',
-                                        fontWeight: 600
+                                        fontWeight: 600,
+                                        opacity: canAddLinks ? 1 : 0.6
                                     }}
                                 >
                                     <ExternalLink size={14} />
                                     Add Links
+                                    {!canAddLinks && <span style={{ fontSize: '0.6rem', marginLeft: '4px' }}>🔒</span>}
                                 </button>
                             </div>
                         </div>
@@ -1032,41 +1114,39 @@ export default function IndexingPanel() {
                 )}
             </AnimatePresence>
 
-            {/* Bot Log Modal */}
+            {/* Add Links Modal */}
             <AnimatePresence>
-                {showBotLogModal && selectedBotLogs && selectedBotForLogs && (
+                {showAddLinksModal && selectedResultForLinks && (
                     <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="panel-card" style={{ width: '100%', maxWidth: '700px', maxHeight: '80vh', overflow: 'hidden' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px', borderBottom: '1px solid var(--border-color)' }}>
-                                <div>
-                                    <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <Bot size={24} color={botOptions.find(b => b.id === selectedBotForLogs)?.color} />
-                                        {botOptions.find(b => b.id === selectedBotForLogs)?.name} Log
-                                    </h3>
-                                    <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--text-light)' }}>{selectedBotLogs.url}</p>
-                                </div>
-                                <button onClick={() => setShowBotLogModal(false)}><X size={24} /></button>
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="panel-card" style={{ width: '100%', maxWidth: '500px', padding: '32px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                                <h3 style={{ margin: 0 }}>Add Link to {selectedResultForLinks.url.substring(0, 30)}...</h3>
+                                <button onClick={() => setShowAddLinksModal(false)}><X size={24} /></button>
                             </div>
-                            <div style={{ padding: '20px', background: '#1a1a2e', maxHeight: '50vh', overflowY: 'auto' }}>
-                                {generateBotLogs(selectedBotLogs, selectedBotForLogs).map((log, i) => (
-                                    <div key={i} style={{
-                                        fontFamily: 'monospace',
-                                        fontSize: '0.75rem',
-                                        lineHeight: '1.6',
-                                        marginBottom: '4px',
-                                        color: log.includes('SYSTEM') ? '#ffab00'
-                                            : log.includes('REQUEST') ? '#00e676'
-                                            : log.includes('RESPONSE') ? '#64ffda'
-                                            : log.includes('COMPLETED') ? '#64ffda'
-                                            : 'rgba(255,255,255,0.7)'
-                                    }}>
-                                        {log}
-                                    </div>
-                                ))}
+                            <div style={{ marginBottom: '24px' }}>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '8px' }}>Link URL</label>
+                                <input
+                                    type="url"
+                                    value={newLinkUrl}
+                                    onChange={(e) => setNewLinkUrl(e.target.value)}
+                                    placeholder="https://example.com/page"
+                                    style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+                                />
                             </div>
-                            <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: '0.8rem', color: 'var(--text-light)' }}>Status: <span style={{ color: 'var(--success)', fontWeight: 600 }}>Delivered</span></span>
-                                <button className="btn btn-primary" onClick={() => setShowBotLogModal(false)}>Close</button>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button 
+                                    onClick={() => setShowAddLinksModal(false)}
+                                    style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white', cursor: 'pointer', fontWeight: 600 }}
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={handleAddLink}
+                                    disabled={!newLinkUrl.trim()}
+                                    style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: 'white', cursor: newLinkUrl.trim() ? 'pointer' : 'not-allowed', fontWeight: 600, opacity: newLinkUrl.trim() ? 1 : 0.6 }}
+                                >
+                                    Add Link
+                                </button>
                             </div>
                         </motion.div>
                     </div>

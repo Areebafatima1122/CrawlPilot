@@ -20,7 +20,8 @@ export async function GET() {
                 role: true,
                 image: true,
                 plan: true,
-                allowedBots: true
+                allowedBots: true,
+                canAddLinks: true
             }
         });
 

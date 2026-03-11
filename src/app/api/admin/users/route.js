@@ -18,6 +18,7 @@ export async function GET() {
                 role: true,
                 plan: true,
                 allowedBots: true,
+                canAddLinks: true,
                 balance: true,
                 createdAt: true,
             },

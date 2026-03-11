@@ -10,7 +10,8 @@ import {
     Zap,
     History,
     Bot,
-    CheckCircle2
+    CheckCircle2,
+    ExternalLink
 } from 'lucide-react';
 
 const botOptions = [
@@ -31,6 +32,7 @@ export default function ManageUsersPage() {
     const [showBotAccessModal, setShowBotAccessModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
     const [selectedBotsForUser, setSelectedBotsForUser] = useState([]);
+    const [canAddLinksForUser, setCanAddLinksForUser] = useState(false);
     const [topupAmount, setTopupAmount] = useState('1000');
     const [isProcessing, setIsProcessing] = useState(false);
     const [users, setUsers] = useState([]);
@@ -86,6 +88,7 @@ export default function ManageUsersPage() {
             allowedBots = ['google'];
         }
         setSelectedBotsForUser(allowedBots);
+        setCanAddLinksForUser(user.canAddLinks || false);
         setShowBotAccessModal(true);
     };
 
@@ -100,7 +103,8 @@ export default function ManageUsersPage() {
     const handleSaveBotAccess = async () => {
         setIsProcessing(true);
         try {
-            const res = await fetch('/api/admin/users/bots', {
+            // Save bot access
+            const resBots = await fetch('/api/admin/users/bots', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
@@ -109,14 +113,24 @@ export default function ManageUsersPage() {
                 })
             });
 
-            if (res.ok) {
+            // Save canAddLinks permission
+            const resLinks = await fetch('/api/admin/users/links-permission', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    userId: selectedUser.id, 
+                    canAddLinks: canAddLinksForUser 
+                })
+            });
+
+            if (resBots.ok && resLinks.ok) {
                 await fetchUsers();
                 setShowBotAccessModal(false);
             } else {
-                alert('Failed to update bot access');
+                alert('Failed to update permissions');
             }
         } catch (error) {
-            console.error('Failed to update bot access:', error);
+            console.error('Failed to update permissions:', error);
         } finally {
             setIsProcessing(false);
         }
@@ -326,6 +340,43 @@ export default function ManageUsersPage() {
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+
+                            {/* Add Links Permission Toggle */}
+                            <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--bg-light)', borderRadius: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <ExternalLink size={18} color="var(--primary)" />
+                                        <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Add Links Permission</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setCanAddLinksForUser(!canAddLinksForUser)}
+                                        style={{
+                                            width: '48px',
+                                            height: '26px',
+                                            borderRadius: '13px',
+                                            border: 'none',
+                                            background: canAddLinksForUser ? 'var(--primary)' : '#ccc',
+                                            cursor: 'pointer',
+                                            position: 'relative',
+                                            transition: 'background 0.2s'
+                                        }}
+                                    >
+                                        <div style={{
+                                            width: '20px',
+                                            height: '20px',
+                                            borderRadius: '50%',
+                                            background: 'white',
+                                            position: 'absolute',
+                                            top: '3px',
+                                            left: canAddLinksForUser ? '25px' : '3px',
+                                            transition: 'left 0.2s'
+                                        }} />
+                                    </button>
+                                </div>
+                                <p style={{ fontSize: '0.75rem', color: 'var(--text-light)', margin: 0 }}>
+                                    Allow user to add links to indexed URLs. Free plan users cannot add links.
+                                </p>
                             </div>
 
                             <button

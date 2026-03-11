@@ -43,21 +43,35 @@ export default function OverviewPage() {
                         botSignals: statsData.totalBotSignals || 0
                     });
 
-                    // Calculate bars from daily stats
+                    // Calculate bars from daily stats with bot type breakdown
                     if (statsData.dailyStats) {
                         const dailyCounts = new Array(14).fill(0);
+                        const dailyPrimary = new Array(14).fill(0);
+                        const dailyAI = new Array(14).fill(0);
                         const today = new Date();
 
                         statsData.dailyStats.forEach(stat => {
                             const date = new Date(stat.createdAt);
                             const diffDays = Math.floor((today - date) / (1000 * 60 * 60 * 24));
                             if (diffDays >= 0 && diffDays < 14) {
-                                dailyCounts[13 - diffDays] += stat._count.id;
+                                const idx = 13 - diffDays;
+                                dailyCounts[idx] += stat._count.id;
+                                // Categorize by bot type (you can adjust logic based on actual data)
+                                if (stat.botType === 'primary') {
+                                    dailyPrimary[idx] += stat._count.id;
+                                } else {
+                                    dailyAI[idx] += stat._count.id;
+                                }
                             }
                         });
 
-                        const maxVal = Math.max(...dailyCounts);
-                        const relativeBars = dailyCounts.map(v => maxVal === 0 ? 0 : Math.max(15, (v / maxVal) * 80));
+                        const maxVal = Math.max(...dailyCounts, 1);
+                        const relativeBars = dailyCounts.map((v, i) => ({
+                            height: maxVal === 0 ? 5 : Math.max(15, (v / maxVal) * 85),
+                            count: v,
+                            primary: dailyPrimary[i],
+                            ai: dailyAI[i]
+                        }));
                         setBars(relativeBars);
                     }
                 }
@@ -141,18 +155,40 @@ export default function OverviewPage() {
 
                 <div className="chart-placeholder">
                     <div className="chart-bars">
-                        {bars.map((h, i) => (
+                        {bars.map((bar, i) => (
                             <motion.div
                                 key={i}
                                 initial={{ height: 0 }}
-                                animate={{ height: `${h}%` }}
+                                animate={{ height: `${bar.height}%` }}
                                 transition={{ duration: 1, delay: i * 0.05 }}
                                 className="chart-bar"
-                            />
+                                style={{
+                                    background: bar.count > 0 
+                                        ? `linear-gradient(to top, var(--primary), var(--primary-light))`
+                                        : 'var(--border-color)',
+                                    position: 'relative',
+                                    cursor: bar.count > 0 ? 'pointer' : 'default'
+                                }}
+                                title={`Day ${i + 1}: ${bar.count} signals (${bar.primary} Primary, ${bar.ai} AI)`}
+                            >
+                                {bar.count > 0 && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '-20px',
+                                        left: '50%',
+                                        transform: 'translateX(-50%)',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 600,
+                                        color: 'var(--primary)'
+                                    }}>
+                                        {bar.count}
+                                    </div>
+                                )}
+                            </motion.div>
                         ))}
                         {/* If all 0, show a subtle prompt */}
-                        {!isLoading && bars.every(h => h === 0) && (
-                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justify: 'center' }}>
+                        {!isLoading && bars.every(b => b.count === 0) && (
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <p className="text-xs text-muted" style={{ background: 'white', padding: '4px 12px', borderRadius: '12px' }}>Awaiting initial discovery data...</p>
                             </div>
                         )}
