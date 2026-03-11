@@ -18,7 +18,9 @@ export async function GET() {
                 email: true,
                 balance: true,
                 role: true,
-                image: true
+                image: true,
+                plan: true,
+                allowedBots: true
             }
         });
 

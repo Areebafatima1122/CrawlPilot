@@ -128,21 +128,37 @@ export default function IndexingPanel() {
                 const total = parsed.reduce((acc, curr) => acc + curr.bots.length, 0);
                 setTotalSignals(total);
             }
-            const resProfile = await fetch('/api/user/profile');
+            
+            // Fetch profile with cache-busting
+            const resProfile = await fetch(`/api/user/profile?t=${Date.now()}`);
             const userProfile = await resProfile.json();
+            
             if (userProfile?.balance !== undefined) setUserBalance(userProfile.balance);
+            
+            // Handle plan and allowedBots
             if (userProfile?.plan) {
                 setUserPlan(userProfile.plan);
-                let bots = ['google'];
+            }
+            
+            // Parse allowedBots - handle both string and array formats
+            let bots = ['google']; // Default
+            if (userProfile?.allowedBots) {
                 try {
-                    bots = JSON.parse(userProfile.allowedBots || '["google"]');
+                    if (typeof userProfile.allowedBots === 'string') {
+                        bots = JSON.parse(userProfile.allowedBots);
+                    } else if (Array.isArray(userProfile.allowedBots)) {
+                        bots = userProfile.allowedBots;
+                    }
                 } catch (e) {
+                    console.error('Error parsing allowedBots:', e);
                     bots = ['google'];
                 }
-                setAllowedBots(bots);
-                // Only select allowed bots by default
-                setSelectedBots(bots);
             }
+            
+            console.log('Fetched allowedBots:', bots); // Debug log
+            setAllowedBots(bots);
+            setSelectedBots(bots);
+            
         } catch (error) {
             console.error('Failed to sync data:', error);
         }
