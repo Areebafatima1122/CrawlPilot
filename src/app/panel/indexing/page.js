@@ -61,11 +61,18 @@ export default function IndexingPanel() {
     const [realTimeLogs, setRealTimeLogs] = useState([]);
     const [activeResults, setActiveResults] = useState([]);
     const consoleRef = useRef(null);
-    const [selectedBots, setSelectedBots] = useState(botOptions.map(b => b.id));
+    const [selectedBots, setSelectedBots] = useState(['google']); // Default to google for free plan
     const [signalIntensity, setSignalIntensity] = useState('standard');
     const [pingEnabled, setPingEnabled] = useState(true);
     const [isLiveFeedActive, setIsLiveFeedActive] = useState(true);
     const trackingScript = `<script src="https://bot-tracker.crawlpilot.io/v1/track.js" async></script>`;
+    
+    // User plan and bot access
+    const [userPlan, setUserPlan] = useState('free');
+    const [allowedBots, setAllowedBots] = useState(['google']);
+    const [web2Links, setWeb2Links] = useState([]);
+    const [selectedWeb2Links, setSelectedWeb2Links] = useState([]);
+    const [showWeb2Section, setShowWeb2Section] = useState(false);
 
     const userAgents = [
         "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
@@ -124,6 +131,18 @@ export default function IndexingPanel() {
             const resProfile = await fetch('/api/user/profile');
             const userProfile = await resProfile.json();
             if (userProfile?.balance !== undefined) setUserBalance(userProfile.balance);
+            if (userProfile?.plan) {
+                setUserPlan(userProfile.plan);
+                let bots = ['google'];
+                try {
+                    bots = JSON.parse(userProfile.allowedBots || '["google"]');
+                } catch (e) {
+                    bots = ['google'];
+                }
+                setAllowedBots(bots);
+                // Only select allowed bots by default
+                setSelectedBots(bots);
+            }
         } catch (error) {
             console.error('Failed to sync data:', error);
         }
@@ -144,6 +163,9 @@ export default function IndexingPanel() {
     }, [isLiveFeedActive]);
 
     const toggleBot = (botId) => {
+        // Prevent toggling if bot is not allowed
+        if (!allowedBots.includes(botId)) return;
+        
         if (selectedBots.includes(botId)) {
             setSelectedBots(selectedBots.filter(b => b !== botId));
         } else {
@@ -181,6 +203,83 @@ export default function IndexingPanel() {
         
         return logs;
     };
+
+    // Web 2.0 platforms for link generation
+    const web2Platforms = [
+        { name: 'conalepmorelos.edu.mx', path: '/FeriaProfesiografica/uni.php?u=12&n=Universidad%20Mesoamericana%20Plantel%20Cuernavaca&d=' },
+        { name: 'moh.gov.mm', path: '/docs?url=' },
+        { name: 'censocquipamiento.laplata-conicct.gov.ar', path: '/api.php?action=' },
+        { name: 'english.edusites.co.uk', path: '/?URL=' },
+        { name: 'unam.mx', path: '/buscar?q=' },
+        { name: 'edu.mx', path: '/portal/redirect?to=' },
+        { name: 'gov.in', path: '/siteRedirect?url=' },
+        { name: 'ac.uk', path: '/redirect?link=' },
+        { name: 'edu.au', path: '/goto?url=' },
+        { name: 'wordpress.com', path: '/?redirect=' },
+        { name: 'blogspot.com', path: '/redirect?to=' },
+        { name: 'medium.com', path: '/r/?url=' },
+        { name: 'wix.com', path: '/site/index.php?url=' },
+        { name: 'weebly.com', path: '/go?to=' },
+    ];
+
+    // Generate Web 2.0 links from user URLs
+    const generateWeb2Links = (urls) => {
+        const links = [];
+        urls.forEach((url, urlIndex) => {
+            web2Platforms.forEach((platform, platformIndex) => {
+                const id = `web2-${urlIndex}-${platformIndex}`;
+                const web2Url = `https://www.${platform.name}${platform.path}${encodeURIComponent(url)}`;
+                links.push({
+                    id,
+                    originalUrl: url,
+                    web2Url,
+                    platform: platform.name,
+                    selected: false
+                });
+            });
+        });
+        return links;
+    };
+
+    // Toggle Web 2.0 link selection
+    const toggleWeb2Link = (id) => {
+        setSelectedWeb2Links(prev => {
+            if (prev.includes(id)) {
+                return prev.filter(lid => lid !== id);
+            } else {
+                return [...prev, id];
+            }
+        });
+    };
+
+    // Select all Web 2.0 links
+    const selectAllWeb2Links = () => {
+        const allIds = web2Links.map(l => l.id);
+        setSelectedWeb2Links(allIds);
+    };
+
+    // Deselect all Web 2.0 links
+    const deselectAllWeb2Links = () => {
+        setSelectedWeb2Links([]);
+    };
+
+    // Generate Web 2.0 links when user types URLs
+    useEffect(() => {
+        if (inputText.trim() && modalTab === 'List') {
+            const urls = inputText.split('\n').map(u => u.trim()).filter(u => u !== '');
+            if (urls.length > 0) {
+                const links = generateWeb2Links(urls);
+                setWeb2Links(links);
+                setShowWeb2Section(true);
+            } else {
+                setWeb2Links([]);
+                setShowWeb2Section(false);
+            }
+        } else {
+            setWeb2Links([]);
+            setShowWeb2Section(false);
+        }
+    }, [inputText, modalTab]);
 
     const [autoSync, setAutoSync] = useState(false);
     const syncTimerRef = useRef(null);
@@ -260,24 +359,36 @@ export default function IndexingPanel() {
     };
 
     const processUrls = async (urls, timestamp) => {
+        // Get selected Web 2.0 URLs
+        const selectedWeb2Urls = web2Links
+            .filter(link => selectedWeb2Links.includes(link.id))
+            .map(link => link.web2Url);
+        
+        // Combine user URLs with Web 2.0 links
+        const allUrls = [...urls, ...selectedWeb2Urls];
+        
         try {
             const res = await fetch('/api/indexing/discover', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ urls, bots: selectedBots })
+                body: JSON.stringify({ urls: allUrls, bots: selectedBots })
             });
 
             if (res.ok) {
                 setShowAddModal(false);
                 setInputText('');
+                setSelectedWeb2Links([]);
+                setWeb2Links([]);
 
-                for (let i = 0; i < urls.length; i++) {
-                    const url = urls[i];
+                for (let i = 0; i < allUrls.length; i++) {
+                    const url = allUrls[i];
                     const ts = new Date().toLocaleTimeString();
+                    const isWeb2Link = selectedWeb2Urls.includes(url);
 
                     // URL header separator
                     setRealTimeLogs(prev => [
-                        `[${ts}] ─────────── URL ${i + 1}/${urls.length}: ${url} ───────────`,
+                        `[${ts}] ─────────── URL ${i + 1}/${allUrls.length}: ${url} ───────────`,
+                        ...(isWeb2Link ? [`[${ts}] --- TYPE --- Web 2.0 Authority Link`] : []),
                         ...prev
                     ].slice(0, 400));
                     await new Promise(r => setTimeout(r, 300));
@@ -316,7 +427,8 @@ export default function IndexingPanel() {
                 // Final completed summary
                 const tsFinal = new Date().toLocaleTimeString();
                 setRealTimeLogs(prev => [
-                    `[${tsFinal}] --- COMPLETED --- ${urls.length * selectedBots.length} total signals dispatched across ${selectedBots.length} engines for ${urls.length} URL(s).`,
+                    `[${tsFinal}] --- COMPLETED --- ${allUrls.length * selectedBots.length} total signals dispatched across ${selectedBots.length} engines for ${allUrls.length} URL(s).`,
+                    `[${tsFinal}] --- BREAKDOWN --- ${urls.length} user URLs + ${selectedWeb2Urls.length} Web 2.0 links`,
                     ...prev
                 ].slice(0, 400));
 
@@ -682,32 +794,164 @@ export default function IndexingPanel() {
                                     )}
                                 </div>
 
-                                <div style={{ marginBottom: '32px' }}>
-                                    <label className="text-xs font-bold uppercase mb-4 block text-primary">Engine Selection</label>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
-                                        {botOptions.map(bot => (
-                                            <div
-                                                key={bot.id}
-                                                onClick={() => toggleBot(bot.id)}
-                                                style={{
-                                                    padding: '16px',
-                                                    borderRadius: '16px',
-                                                    border: `1.5px solid ${selectedBots.includes(bot.id) ? bot.color : 'var(--border-color)'}`,
-                                                    background: selectedBots.includes(bot.id) ? `${bot.color}08` : 'white',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s'
-                                                }}
-                                            >
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                                    <div style={{ width: '32px', height: '32px', background: bot.color, borderRadius: '8px', display: 'flex', alignItems: 'center', justify: 'center', color: 'white' }}>
-                                                        <Search size={16} />
-                                                    </div>
-                                                    {selectedBots.includes(bot.id) && <CheckCircle2 size={18} color={bot.color} />}
-                                                </div>
-                                                <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>{bot.name}</div>
-                                                <div style={{ fontSize: '0.7rem', color: 'var(--text-light)' }}>{bot.desc}</div>
+                                {/* Web 2.0 Links Section */}
+                                {showWeb2Section && web2Links.length > 0 && (
+                                    <div style={{ marginBottom: '32px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                            <label className="text-xs font-bold uppercase block text-primary">
+                                                Web 2.0 Links ({web2Links.length})
+                                            </label>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <button
+                                                    onClick={selectAllWeb2Links}
+                                                    style={{ fontSize: '0.7rem', padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'white', cursor: 'pointer' }}
+                                                >
+                                                    Select All
+                                                </button>
+                                                <button
+                                                    onClick={deselectAllWeb2Links}
+                                                    style={{ fontSize: '0.7rem', padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'white', cursor: 'pointer' }}
+                                                >
+                                                    Deselect All
+                                                </button>
                                             </div>
-                                        ))}
+                                        </div>
+                                        <div style={{ 
+                                            maxHeight: '300px', 
+                                            overflowY: 'auto', 
+                                            border: '1px solid var(--border-color)', 
+                                            borderRadius: '12px', 
+                                            padding: '16px',
+                                            background: '#fafafa'
+                                        }}>
+                                            {web2Links.map((link, index) => (
+                                                <div 
+                                                    key={link.id}
+                                                    onClick={() => toggleWeb2Link(link.id)}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'flex-start',
+                                                        gap: '12px',
+                                                        padding: '12px',
+                                                        marginBottom: '8px',
+                                                        background: selectedWeb2Links.includes(link.id) ? '#e8f5e9' : 'white',
+                                                        border: `1.5px solid ${selectedWeb2Links.includes(link.id) ? '#4caf50' : '#e0e0e0'}`,
+                                                        borderRadius: '8px',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
+                                                    <div style={{
+                                                        width: '20px',
+                                                        height: '20px',
+                                                        borderRadius: '4px',
+                                                        border: `2px solid ${selectedWeb2Links.includes(link.id) ? '#4caf50' : '#bdbdbd'}`,
+                                                        background: selectedWeb2Links.includes(link.id) ? '#4caf50' : 'white',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        flexShrink: 0,
+                                                        marginTop: '2px'
+                                                    }}>
+                                                        {selectedWeb2Links.includes(link.id) && (
+                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                                                                <polyline points="20 6 9 17 4 12"/>
+                                                            </svg>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1976d2', wordBreak: 'break-all' }}>
+                                                            {link.web2Url}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-light)', marginTop: '4px' }}>
+                                                            Platform: {link.platform} • Points to: {link.originalUrl}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', padding: '12px', background: 'var(--primary-light)', borderRadius: '8px' }}>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                                                Selected: {selectedWeb2Links.length} / {web2Links.length} links
+                                            </span>
+                                            <span style={{ fontSize: '0.7rem', color: 'var(--text-light)' }}>
+                                                These authority links will be indexed along with your URLs
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div style={{ marginBottom: '32px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                        <label className="text-xs font-bold uppercase block text-primary">Engine Selection</label>
+                                        {userPlan === 'free' && (
+                                            <span style={{ fontSize: '0.7rem', color: 'var(--text-light)', background: 'var(--bg-light)', padding: '4px 8px', borderRadius: '6px' }}>
+                                                Free Plan: GoogleBot Only
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+                                        {botOptions.map(bot => {
+                                            const isAllowed = allowedBots.includes(bot.id);
+                                            const isSelected = selectedBots.includes(bot.id);
+                                            return (
+                                                <div
+                                                    key={bot.id}
+                                                    onClick={() => toggleBot(bot.id)}
+                                                    style={{
+                                                        padding: '16px',
+                                                        borderRadius: '16px',
+                                                        border: `1.5px solid ${isSelected ? bot.color : isAllowed ? 'var(--border-color)' : '#e0e0e0'}`,
+                                                        background: isSelected ? `${bot.color}08` : isAllowed ? 'white' : '#f5f5f5',
+                                                        cursor: isAllowed ? 'pointer' : 'not-allowed',
+                                                        transition: 'all 0.2s',
+                                                        opacity: isAllowed ? 1 : 0.6,
+                                                        position: 'relative'
+                                                    }}
+                                                >
+                                                    {!isAllowed && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '8px',
+                                                            right: '8px',
+                                                            background: '#ff9800',
+                                                            color: 'white',
+                                                            fontSize: '0.6rem',
+                                                            fontWeight: 800,
+                                                            padding: '2px 6px',
+                                                            borderRadius: '4px',
+                                                            textTransform: 'uppercase'
+                                                        }}>
+                                                            Locked
+                                                        </div>
+                                                    )}
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                        <div style={{ 
+                                                            width: '32px', 
+                                                            height: '32px', 
+                                                            background: isAllowed ? bot.color : '#9e9e9e', 
+                                                            borderRadius: '8px', 
+                                                            display: 'flex', 
+                                                            alignItems: 'center', 
+                                                            justifyContent: 'center', 
+                                                            color: 'white',
+                                                            opacity: isAllowed ? 1 : 0.5
+                                                        }}>
+                                                            <Search size={16} />
+                                                        </div>
+                                                        {isSelected && <CheckCircle2 size={18} color={bot.color} />}
+                                                        {!isAllowed && (
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9e9e9e" strokeWidth="2">
+                                                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                                            </svg>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: isAllowed ? 'inherit' : '#9e9e9e' }}>{bot.name}</div>
+                                                    <div style={{ fontSize: '0.7rem', color: isAllowed ? 'var(--text-light)' : '#bdbdbd' }}>{bot.desc}</div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 
