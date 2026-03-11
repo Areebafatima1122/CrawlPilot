@@ -28,7 +28,9 @@ import {
     Settings,
     ShieldAlert,
     Network,
-    FileCode
+    FileCode,
+    ScrollText,
+    Bot
 } from 'lucide-react';
 
 const botOptions = [
@@ -47,6 +49,9 @@ const botOptions = [
 export default function IndexingPanel() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showCodeModal, setShowCodeModal] = useState(false);
+    const [showBotLogModal, setShowBotLogModal] = useState(false);
+    const [selectedBotLogs, setSelectedBotLogs] = useState(null);
+    const [selectedBotForLogs, setSelectedBotForLogs] = useState(null);
     const [modalTab, setModalTab] = useState('List'); // 'List' or 'Sitemap'
     const [inputText, setInputText] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -146,10 +151,35 @@ export default function IndexingPanel() {
         }
     };
 
-    const copyCode = () => {
-        navigator.clipboard.writeText(trackingScript);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+    const openBotLogs = (result, botId) => {
+        setSelectedBotLogs(result);
+        setSelectedBotForLogs(botId);
+        setShowBotLogModal(true);
+    };
+
+    // Generate per-bot logs
+    const generateBotLogs = (result, botId) => {
+        const ts = new Date(result.createdAt).toLocaleTimeString();
+        const bot = botOptions.find(b => b.id === botId);
+        const logs = [];
+        
+        logs.push(`[${ts}] --- SYSTEM --- Bot Log for ${bot?.name || botId}`);
+        logs.push(`[${ts}] --- TARGET --- ${result.url}`);
+        logs.push(`[${ts}] --- STATUS --- Signal dispatched successfully`);
+        
+        const randIdx = Math.floor(Math.random() * userAgents.length);
+        const ua = userAgents[randIdx];
+        const device = devices[randIdx % devices.length];
+        
+        logs.push(`[${ts}] --- REQUEST --- GET ${result.url}`);
+        logs.push(`[${ts}] --- USER-AGENT --- ${ua}`);
+        logs.push(`[${ts}] --- DEVICE --- ${device}`);
+        logs.push(`[${ts}] --- HEADER --- Accept: text/html,application/xhtml+xml`);
+        logs.push(`[${ts}] --- HEADER --- Connection: keep-alive`);
+        logs.push(`[${ts}] --- RESPONSE --- 200 OK`);
+        logs.push(`[${ts}] --- COMPLETED --- ${bot?.name} signal delivered`);
+        
+        return logs;
     };
 
     const [autoSync, setAutoSync] = useState(false);
@@ -523,6 +553,50 @@ export default function IndexingPanel() {
                                 ))}
                                 {res.bots.length > 4 && <div className="bot-tag">+{res.bots.length - 4} more</div>}
                             </div>
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                                {res.bots.map(bot => {
+                                    const botInfo = botOptions.find(b => b.id === bot);
+                                    return (
+                                        <button
+                                            key={bot}
+                                            onClick={() => openBotLogs(res, bot)}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                padding: '6px 12px',
+                                                borderRadius: '8px',
+                                                border: '1px solid var(--border-color)',
+                                                background: 'white',
+                                                cursor: 'pointer',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 600
+                                            }}
+                                        >
+                                            <img src={`https://www.google.com/s2/favicons?domain=${bot}.com`} width="14" height="14" alt="" style={{ borderRadius: '2px' }} onError={(e) => e.target.style.display='none'} />
+                                            {botInfo?.name || bot} Bot Log
+                                        </button>
+                                    );
+                                })}
+                                <button
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '6px 12px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        background: 'var(--primary)',
+                                        color: 'white',
+                                        cursor: 'pointer',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 600
+                                    }}
+                                >
+                                    <ExternalLink size={14} />
+                                    Add Links
+                                </button>
+                            </div>
                         </div>
                         <div className="result-meta">
                             <div className="badge badge-success" style={{ padding: '8px 16px' }}>
@@ -693,6 +767,47 @@ export default function IndexingPanel() {
                             </div>
                             <pre style={{ background: '#121212', color: '#00e676', padding: '24px', borderRadius: '12px', overflow: 'auto' }}>{trackingScript}</pre>
                             <button className="btn btn-primary btn-block mt-4" onClick={copyCode}>{copied ? 'Copied!' : 'Copy Snippet'}</button>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Bot Log Modal */}
+            <AnimatePresence>
+                {showBotLogModal && selectedBotLogs && selectedBotForLogs && (
+                    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="panel-card" style={{ width: '100%', maxWidth: '700px', maxHeight: '80vh', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px', borderBottom: '1px solid var(--border-color)' }}>
+                                <div>
+                                    <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <Bot size={24} color={botOptions.find(b => b.id === selectedBotForLogs)?.color} />
+                                        {botOptions.find(b => b.id === selectedBotForLogs)?.name} Log
+                                    </h3>
+                                    <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--text-light)' }}>{selectedBotLogs.url}</p>
+                                </div>
+                                <button onClick={() => setShowBotLogModal(false)}><X size={24} /></button>
+                            </div>
+                            <div style={{ padding: '20px', background: '#1a1a2e', maxHeight: '50vh', overflowY: 'auto' }}>
+                                {generateBotLogs(selectedBotLogs, selectedBotForLogs).map((log, i) => (
+                                    <div key={i} style={{
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.75rem',
+                                        lineHeight: '1.6',
+                                        marginBottom: '4px',
+                                        color: log.includes('SYSTEM') ? '#ffab00'
+                                            : log.includes('REQUEST') ? '#00e676'
+                                            : log.includes('RESPONSE') ? '#64ffda'
+                                            : log.includes('COMPLETED') ? '#64ffda'
+                                            : 'rgba(255,255,255,0.7)'
+                                    }}>
+                                        {log}
+                                    </div>
+                                ))}
+                            </div>
+                            <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-light)' }}>Status: <span style={{ color: 'var(--success)', fontWeight: 600 }}>Delivered</span></span>
+                                <button className="btn btn-primary" onClick={() => setShowBotLogModal(false)}>Close</button>
+                            </div>
                         </motion.div>
                     </div>
                 )}

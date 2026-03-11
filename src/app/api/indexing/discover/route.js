@@ -36,10 +36,39 @@ export async function POST(req) {
             return NextResponse.json({ error: "Invalid URLs" }, { status: 400 });
         }
 
+        // Get user plan and allowed bots
+        const user = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { plan: true, allowedBots: true }
+        });
+
+        let allowedBots = [];
+        try {
+            allowedBots = JSON.parse(user.allowedBots || '["google"]');
+        } catch (e) {
+            allowedBots = ["google"];
+        }
+
+        // Filter bots based on user's allowed bots
+        let filteredBots = bots.filter(bot => allowedBots.includes(bot));
+
+        // For free plan, only allow google bot
+        if (user.plan === "free" && filteredBots.length === 0) {
+            // Force google bot for free plan
+            filteredBots = ["google"];
+        }
+
+        // If no bots allowed after filtering, reject
+        if (filteredBots.length === 0) {
+            return NextResponse.json({ 
+                error: "No allowed bots selected. Please upgrade your plan or contact admin." 
+            }, { status: 403 });
+        }
+
         // Create indexing records
         const data = urls.map(url => ({
             url,
-            bots: JSON.stringify(bots),
+            bots: JSON.stringify(filteredBots),
             status: "Delivered",
             userId: session.user.id
         }));
@@ -48,8 +77,8 @@ export async function POST(req) {
             data: data
         });
 
-        // Deduct balance (mock logic: 1 credit per URL per bot)
-        const cost = urls.length * bots.length;
+        // Deduct balance (1 credit per URL per bot)
+        const cost = urls.length * filteredBots.length;
         await prisma.user.update({
             where: { id: session.user.id },
             data: {
@@ -59,7 +88,7 @@ export async function POST(req) {
             }
         });
 
-        return NextResponse.json({ success: true, count: urls.length });
+        return NextResponse.json({ success: true, count: urls.length, botsUsed: filteredBots });
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: "Failed to process discovery" }, { status: 500 });

@@ -8,12 +8,29 @@ import {
     X,
     TrendingUp,
     Zap,
-    History
+    History,
+    Bot,
+    CheckCircle2
 } from 'lucide-react';
+
+const botOptions = [
+    { id: 'google', name: 'GoogleBot', color: '#4285F4' },
+    { id: 'bing', name: 'BingBot', color: '#00A4EF' },
+    { id: 'openai', name: 'OpenAI Bot', color: '#10A37F' },
+    { id: 'baidu', name: 'Baidu Spider', color: '#DE0000' },
+    { id: 'yandex', name: 'Yandex Bot', color: '#FFCC00' },
+    { id: 'duck', name: 'DuckDuckGo', color: '#DE5833' },
+    { id: 'apple', name: 'AppleBot', color: '#000000' },
+    { id: 'pinterest', name: 'Pinterest Bot', color: '#E60023' },
+    { id: 'common', name: 'CommonCrawl', color: '#B0B0B0' },
+    { id: 'anthropic', name: 'ClaudeBot', color: '#D97757' }
+];
 
 export default function ManageUsersPage() {
     const [showTopupModal, setShowTopupModal] = useState(false);
+    const [showBotAccessModal, setShowBotAccessModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
+    const [selectedBotsForUser, setSelectedBotsForUser] = useState([]);
     const [topupAmount, setTopupAmount] = useState('1000');
     const [isProcessing, setIsProcessing] = useState(false);
     const [users, setUsers] = useState([]);
@@ -55,6 +72,51 @@ export default function ManageUsersPage() {
             }
         } catch (error) {
             console.error('Top-up failed:', error);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const openBotAccessModal = (user) => {
+        setSelectedUser(user);
+        let allowedBots = [];
+        try {
+            allowedBots = JSON.parse(user.allowedBots || '["google"]');
+        } catch (e) {
+            allowedBots = ['google'];
+        }
+        setSelectedBotsForUser(allowedBots);
+        setShowBotAccessModal(true);
+    };
+
+    const toggleBotForUser = (botId) => {
+        if (selectedBotsForUser.includes(botId)) {
+            setSelectedBotsForUser(selectedBotsForUser.filter(b => b !== botId));
+        } else {
+            setSelectedBotsForUser([...selectedBotsForUser, botId]);
+        }
+    };
+
+    const handleSaveBotAccess = async () => {
+        setIsProcessing(true);
+        try {
+            const res = await fetch('/api/admin/users/bots', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    userId: selectedUser.id, 
+                    allowedBots: selectedBotsForUser 
+                })
+            });
+
+            if (res.ok) {
+                await fetchUsers();
+                setShowBotAccessModal(false);
+            } else {
+                alert('Failed to update bot access');
+            }
+        } catch (error) {
+            console.error('Failed to update bot access:', error);
         } finally {
             setIsProcessing(false);
         }
@@ -129,6 +191,13 @@ export default function ManageUsersPage() {
                                             >
                                                 <Plus size={14} /> Top-up
                                             </button>
+                                            <button
+                                                className="admin-btn"
+                                                style={{ fontSize: '0.75rem', padding: '6px 12px', background: 'var(--bg-light)' }}
+                                                onClick={() => openBotAccessModal(user)}
+                                            >
+                                                <Bot size={14} /> Bot Access
+                                            </button>
                                             <button className="admin-btn" style={{ background: 'var(--bg-light)', padding: '6px' }}>
                                                 <History size={16} />
                                             </button>
@@ -195,6 +264,78 @@ export default function ManageUsersPage() {
                                     {isProcessing ? 'Processing Transaction...' : 'Confirm Top-up'}
                                 </button>
                             </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Bot Access Modal */}
+            <AnimatePresence>
+                {showBotAccessModal && selectedUser && (
+                    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="admin-card"
+                            style={{ width: '100%', maxWidth: '500px', maxHeight: '80vh', overflow: 'auto' }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Bot size={20} />
+                                    Manage Bot Access
+                                </h3>
+                                <button onClick={() => setShowBotAccessModal(false)}><X size={20} /></button>
+                            </div>
+
+                            <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--admin-primary-light)', borderRadius: '12px', border: '1px solid var(--admin-primary)' }}>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--admin-primary)', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' }}>Target Account</div>
+                                <div style={{ fontWeight: 700 }}>{selectedUser.name}</div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-light)' }}>{selectedUser.email}</div>
+                            </div>
+
+                            <div style={{ marginBottom: '24px' }}>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '12px' }}>Allowed Bots</label>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                    {botOptions.map(bot => (
+                                        <div
+                                            key={bot.id}
+                                            onClick={() => toggleBotForUser(bot.id)}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                padding: '10px',
+                                                borderRadius: '8px',
+                                                border: `1.5px solid ${selectedBotsForUser.includes(bot.id) ? bot.color : 'var(--border-color)'}`,
+                                                background: selectedBotsForUser.includes(bot.id) ? `${bot.color}15` : 'white',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            <div style={{
+                                                width: '20px',
+                                                height: '20px',
+                                                borderRadius: '4px',
+                                                background: bot.color,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}>
+                                                {selectedBotsForUser.includes(bot.id) && <CheckCircle2 size={14} color="white" />}
+                                            </div>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{bot.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleSaveBotAccess}
+                                className="admin-btn admin-btn-primary"
+                                style={{ width: '100%', padding: '12px', justifyContent: 'center' }}
+                                disabled={isProcessing}
+                            >
+                                {isProcessing ? 'Saving...' : 'Save Bot Access'}
+                            </button>
                         </motion.div>
                     </div>
                 )}
