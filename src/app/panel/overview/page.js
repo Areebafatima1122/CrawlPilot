@@ -27,46 +27,43 @@ export default function OverviewPage() {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                // Fetch User Profile for balance
-                const resProfile = await fetch('/api/user/profile');
-                const profile = await resProfile.json();
+                // Fetch comprehensive stats from new API (no 50 record limit)
+                const resStats = await fetch('/api/user/stats');
+                const statsData = await resStats.json();
 
-                // Fetch Indexing Results for usage stats
+                // Fetch recent results for the list
                 const resResults = await fetch('/api/indexing/discover');
                 const results = await resResults.json();
 
-                if (profile && !profile.error) {
-                    const deliveredCount = Array.isArray(results) ? results.filter(r => r.status === 'Delivered').length : 0;
-                    const usedCount = Array.isArray(results) ? results.length : 0;
-
+                if (statsData && !statsData.error) {
                     setStats({
-                        balance: profile.balance || 0,
-                        used: usedCount,
-                        delivered: deliveredCount,
-                        botSignals: usedCount * 12 // Signals = URLs * Bots (approx)
+                        balance: statsData.balance || 0,
+                        used: statsData.totalUrls || 0,
+                        delivered: statsData.delivered || 0,
+                        botSignals: statsData.totalBotSignals || 0
                     });
 
-                    if (Array.isArray(results)) {
-                        // Calculate bars for last 14 days
-                        const dailyStats = new Array(14).fill(0);
+                    // Calculate bars from daily stats
+                    if (statsData.dailyStats) {
+                        const dailyCounts = new Array(14).fill(0);
                         const today = new Date();
 
-                        results.forEach(r => {
-                            const date = new Date(r.createdAt);
+                        statsData.dailyStats.forEach(stat => {
+                            const date = new Date(stat.createdAt);
                             const diffDays = Math.floor((today - date) / (1000 * 60 * 60 * 24));
                             if (diffDays >= 0 && diffDays < 14) {
-                                dailyStats[13 - diffDays]++;
+                                dailyCounts[13 - diffDays] += stat._count.id;
                             }
                         });
 
-                        // Maximize height (relative to highest peak)
-                        const maxVal = Math.max(...dailyStats);
-                        const relativeBars = dailyStats.map(v => maxVal === 0 ? 0 : Math.max(15, (v / maxVal) * 80));
+                        const maxVal = Math.max(...dailyCounts);
+                        const relativeBars = dailyCounts.map(v => maxVal === 0 ? 0 : Math.max(15, (v / maxVal) * 80));
                         setBars(relativeBars);
-
-                        // Recent results
-                        setRecentResults(results.slice(0, 3));
                     }
+                }
+
+                if (Array.isArray(results)) {
+                    setRecentResults(results.slice(0, 3));
                 }
             } catch (err) {
                 console.error("Failed to load overview data:", err);
@@ -76,6 +73,13 @@ export default function OverviewPage() {
         };
 
         fetchStats();
+
+        // Set up polling for real-time updates
+        const interval = setInterval(() => {
+            fetchStats();
+        }, 5000); // Poll every 5 seconds
+
+        return () => clearInterval(interval);
     }, []);
 
     return (
