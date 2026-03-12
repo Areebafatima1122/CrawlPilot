@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "app/api/auth/[...nextauth]/route";
+import { prisma } from "lib/prisma";
 
 export async function POST(req) {
     try {
@@ -19,7 +22,7 @@ export async function POST(req) {
         }
 
         const xml = await response.text();
-        
+
         // Simple regex to extract <loc> tags
         const locRegex = /<loc>(.*?)<\/loc>/g;
         const urls = [];
@@ -32,10 +35,10 @@ export async function POST(req) {
         // Limit to 1000 URLs to avoid abuse in this version
         const limitedUrls = urls.slice(0, 1000);
 
-        return NextResponse.json({ 
-            urls: limitedUrls, 
+        return NextResponse.json({
+            urls: limitedUrls,
             total: urls.length,
-            count: limitedUrls.length 
+            count: limitedUrls.length
         });
     } catch (error) {
         console.error("Sitemap Fetch Error:", error);
